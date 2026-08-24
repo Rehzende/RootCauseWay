@@ -219,11 +219,12 @@ func (s *IngestionService) IngestAlert(ctx context.Context, token string, rawPay
 		OrgID:     webhook.OrgID,
 		Timestamp: time.Now(),
 		Payload: models.IncidentCreatedPayload{
-			IncidentID: incident.ID,
-			Title:      incident.Title,
-			Severity:   incident.Severity,
-			Status:     incident.Status,
-			SoftwareID: softwareID,
+			IncidentID:     incident.ID,
+			IncidentNumber: incident.IncidentNumber,
+			Title:          incident.Title,
+			Severity:       incident.Severity,
+			Status:         incident.Status,
+			SoftwareID:     softwareID,
 		},
 	}
 	if err := s.publisher.Publish(ctx, createdChannel, createdEnvelope); err != nil {

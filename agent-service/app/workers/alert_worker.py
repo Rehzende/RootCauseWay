@@ -397,11 +397,31 @@ class AlertWorker:
                 ),
             )
 
-            # Send notifications
+            # Send notifications. Fetch the incident once so notifications can
+            # show "INC-0042 - Title" instead of the raw UUID (see
+            # NotificationDispatcher._format_incident_message) -- best-effort,
+            # a fetch failure just falls back to the UUID-only message rather
+            # than blocking notifications entirely.
+            incident_number = None
+            incident_title = None
+            try:
+                incident_record = await self._backend.get_incident(payload.incident_id, org_id)
+                incident_number = incident_record.get("incident_number")
+                incident_title = incident_record.get("title")
+            except Exception:
+                logger.warning(
+                    "Failed to fetch incident %s for notification formatting", payload.incident_id,
+                )
+
             await self._notifier.notify(
                 self._backend, org_id, payload.incident_id,
                 "incident_created",
-                {"incident_id": str(payload.incident_id), "severity": alert_dict.get("severity", "medium")},
+                {
+                    "incident_id": str(payload.incident_id),
+                    "incident_number": incident_number,
+                    "title": incident_title,
+                    "severity": alert_dict.get("severity", "medium"),
+                },
             )
 
             # If RCA completed, send RCA notification
@@ -412,6 +432,8 @@ class AlertWorker:
                     "rca_completed",
                     {
                         "incident_id": str(payload.incident_id),
+                        "incident_number": incident_number,
+                        "title": incident_title,
                         "severity": alert_dict.get("severity", "medium"),
                         "root_cause": rca_result.get("rca", {}).get("root_cause_summary", ""),
                     },
@@ -649,7 +671,12 @@ class AlertWorker:
                 await self._notifier.notify(
                     self._backend, org_id, incident_id,
                     "incident.resolved",
-                    {"incident_id": str(incident_id), "severity": incident.get("severity", "medium")},
+                    {
+                        "incident_id": str(incident_id),
+                        "incident_number": incident.get("incident_number"),
+                        "title": incident.get("title"),
+                        "severity": incident.get("severity", "medium"),
+                    },
                 )
             except Exception as e:
                 logger.error("Failed to dispatch resolved notification for incident %s: %s", incident_id, e)

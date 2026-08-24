@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Rehzende/RootCauseway/backend/internal/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/Rehzende/RootCauseway/backend/internal/models"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -332,20 +332,44 @@ func NewIncidentRepository(pool *pgxpool.Pool) *PgIncidentRepository {
 	return &PgIncidentRepository{pool: pool}
 }
 
+// Create assigns the incident a sequential per-org number (see
+// FormatIncidentCode / migration 030_incident_number) and inserts the row
+// inside one transaction: the UPDATE ... RETURNING against
+// organizations.next_incident_number takes a row lock, so two concurrent
+// Create calls for the same org can never be handed the same number --
+// Postgres serializes them.
 func (r *PgIncidentRepository) Create(ctx context.Context, i *models.Incident) error {
-	_, err := r.pool.Exec(ctx,
-		`INSERT INTO incidents (id, org_id, software_id, title, description, severity, status, assignee_id, source_alert_id, root_cause, mitigation, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-		i.ID, i.OrgID, i.SoftwareID, i.Title, i.Description, i.Severity, i.Status, i.AssigneeID, i.SourceAlertID, i.RootCause, i.Mitigation, i.CreatedAt, i.UpdatedAt)
-	return err
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after a successful Commit
+
+	if err := tx.QueryRow(ctx,
+		`UPDATE organizations SET next_incident_number = next_incident_number + 1
+		 WHERE id = $1 RETURNING next_incident_number - 1`,
+		i.OrgID,
+	).Scan(&i.IncidentNumber); err != nil {
+		return fmt.Errorf("reserve incident number: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO incidents (id, org_id, software_id, incident_number, title, description, severity, status, assignee_id, source_alert_id, root_cause, mitigation, created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+		i.ID, i.OrgID, i.SoftwareID, i.IncidentNumber, i.Title, i.Description, i.Severity, i.Status, i.AssigneeID, i.SourceAlertID, i.RootCause, i.Mitigation, i.CreatedAt, i.UpdatedAt,
+	); err != nil {
+		return fmt.Errorf("insert incident: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *PgIncidentRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Incident, error) {
 	var i models.Incident
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, org_id, software_id, title, COALESCE(description,''), severity, status, assignee_id, COALESCE(source_alert_id,''), COALESCE(root_cause,''), COALESCE(mitigation,''), created_at, updated_at, resolved_at
+		`SELECT id, incident_number, org_id, software_id, title, COALESCE(description,''), severity, status, assignee_id, COALESCE(source_alert_id,''), COALESCE(root_cause,''), COALESCE(mitigation,''), created_at, updated_at, resolved_at
 		 FROM incidents WHERE id=$1`, id).
-		Scan(&i.ID, &i.OrgID, &i.SoftwareID, &i.Title, &i.Description, &i.Severity, &i.Status, &i.AssigneeID, &i.SourceAlertID, &i.RootCause, &i.Mitigation, &i.CreatedAt, &i.UpdatedAt, &i.ResolvedAt)
+		Scan(&i.ID, &i.IncidentNumber, &i.OrgID, &i.SoftwareID, &i.Title, &i.Description, &i.Severity, &i.Status, &i.AssigneeID, &i.SourceAlertID, &i.RootCause, &i.Mitigation, &i.CreatedAt, &i.UpdatedAt, &i.ResolvedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +408,7 @@ func (r *PgIncidentRepository) List(ctx context.Context, orgID uuid.UUID, status
 	offset := (page - 1) * perPage
 	selectArgs := append(args, perPage, offset)
 	rows, err := r.pool.Query(ctx,
-		fmt.Sprintf(`SELECT id, org_id, software_id, title, COALESCE(description,''), severity, status, assignee_id, COALESCE(source_alert_id,''), COALESCE(root_cause,''), COALESCE(mitigation,''), created_at, updated_at, resolved_at
+		fmt.Sprintf(`SELECT id, incident_number, org_id, software_id, title, COALESCE(description,''), severity, status, assignee_id, COALESCE(source_alert_id,''), COALESCE(root_cause,''), COALESCE(mitigation,''), created_at, updated_at, resolved_at
 		 FROM incidents %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, baseWhere, idx, idx+1), selectArgs...)
 	if err != nil {
 		return nil, 0, err
@@ -394,7 +418,7 @@ func (r *PgIncidentRepository) List(ctx context.Context, orgID uuid.UUID, status
 	var items []models.Incident
 	for rows.Next() {
 		var i models.Incident
-		if err := rows.Scan(&i.ID, &i.OrgID, &i.SoftwareID, &i.Title, &i.Description, &i.Severity, &i.Status, &i.AssigneeID, &i.SourceAlertID, &i.RootCause, &i.Mitigation, &i.CreatedAt, &i.UpdatedAt, &i.ResolvedAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.IncidentNumber, &i.OrgID, &i.SoftwareID, &i.Title, &i.Description, &i.Severity, &i.Status, &i.AssigneeID, &i.SourceAlertID, &i.RootCause, &i.Mitigation, &i.CreatedAt, &i.UpdatedAt, &i.ResolvedAt); err != nil {
 			return nil, 0, err
 		}
 		items = append(items, i)

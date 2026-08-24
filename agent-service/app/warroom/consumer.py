@@ -191,6 +191,18 @@ class WarRoomConsumer:
             return
 
         logger.info("Notifying channels for war room created on incident %s", incident_id)
+
+        incident_number = None
+        incident_title = None
+        try:
+            incident_record = await self._backend.get_incident(UUID(incident_id), UUID(org_id))
+            incident_number = incident_record.get("incident_number")
+            incident_title = incident_record.get("title")
+        except Exception:
+            logger.warning(
+                "Failed to fetch incident %s for war room notification formatting", incident_id,
+            )
+
         await self._notifier.notify(
             self._backend,
             UUID(org_id),
@@ -198,6 +210,8 @@ class WarRoomConsumer:
             "war_room_created",
             {
                 "incident_id": incident_id,
+                "incident_number": incident_number,
+                "title": incident_title,
                 "severity": payload.get("severity", "medium"),
                 "join_url": payload.get("join_url", ""),
             },

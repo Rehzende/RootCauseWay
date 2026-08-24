@@ -9,6 +9,7 @@ import { SkeletonTable } from '@/components/Skeleton';
 import { NoIncidents } from '@/components/EmptyState';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useToast } from '@/components/Toast';
+import { formatIncidentCode } from '@/lib/incident';
 import type { Incident, Severity, IncidentStatus } from '@/types/api';
 
 type DateRange = '24h' | '7d' | '30d' | 'all';
@@ -39,10 +40,11 @@ export function IncidentsPage() {
   useEffect(() => {
     if (!lastEvent || lastEvent.type !== 'incident.created') return;
     queryClient.invalidateQueries({ queryKey: ['incidents'] });
-    const eventData = lastEvent.data as { title?: string } | undefined;
+    const eventData = lastEvent.data as { title?: string; incident_number?: number } | undefined;
+    const code = eventData?.incident_number ? `${formatIncidentCode(eventData.incident_number)} - ` : '';
     addToast({
       type: 'info',
-      title: `New incident: ${eventData?.title ?? 'Unknown'}`,
+      title: `New incident: ${code}${eventData?.title ?? 'Unknown'}`,
       action: lastEvent.incident_id
         ? { label: 'View', href: `/incidents/${lastEvent.incident_id}` }
         : undefined,
@@ -77,7 +79,11 @@ export function IncidentsPage() {
   }, [data?.data, searchText]);
 
   const columns: Column<Incident>[] = [
-    { key: 'title', header: 'Title', render: (i) => <span className="font-medium text-gray-900">{i.title}</span> },
+    { key: 'title', header: 'Title', render: (i) => (
+      <span className="font-medium text-gray-900">
+        <span className="text-gray-500 font-normal">{formatIncidentCode(i.incident_number)}</span> - {i.title}
+      </span>
+    )},
     { key: 'severity', header: 'Severity', render: (i) => <SeverityBadge severity={i.severity} /> },
     { key: 'status', header: 'Status', render: (i) => <StatusBadge status={i.status} /> },
     { key: 'created', header: 'Created', render: (i) => (

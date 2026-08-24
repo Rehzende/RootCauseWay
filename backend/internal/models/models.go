@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -180,23 +181,29 @@ type AlertSnapshot struct {
 
 // Incident represents an incident under investigation.
 type Incident struct {
-	ID            uuid.UUID           `json:"id"`
-	OrgID         uuid.UUID           `json:"org_id"`
-	SoftwareID    uuid.UUID           `json:"software_id"`
-	Title         string              `json:"title"`
-	Description   string              `json:"description"`
-	Severity      string              `json:"severity"`
-	Status        string              `json:"status"`
-	AssigneeID    *uuid.UUID          `json:"assignee_id,omitempty"`
-	SourceAlertID string              `json:"source_alert_id"`
-	RootCause     string              `json:"root_cause"`
-	Mitigation    string              `json:"mitigation"`
-	Timeline      []IncidentEvent     `json:"timeline,omitempty"`
-	Evidence      []IncidentEvidence  `json:"evidence,omitempty"`
-	AgentRuns     []AgentRun          `json:"agent_runs,omitempty"`
-	RCI           *IncidentRCI        `json:"rci,omitempty"`
-	RCA           *IncidentRCA        `json:"rca,omitempty"`
-	Postmortem    *IncidentPostmortem `json:"postmortem,omitempty"`
+	ID uuid.UUID `json:"id"`
+	// IncidentNumber is sequential per org (1, 2, 3, ...), assigned once at
+	// creation (PgIncidentRepository.Create) and immutable after that --
+	// see FormatIncidentCode for the "INC-0001" display form. The UUID
+	// above stays the real identifier everywhere internally (foreign keys,
+	// API paths); this is purely a human-friendly display/reference number.
+	IncidentNumber int64               `json:"incident_number"`
+	OrgID          uuid.UUID           `json:"org_id"`
+	SoftwareID     uuid.UUID           `json:"software_id"`
+	Title          string              `json:"title"`
+	Description    string              `json:"description"`
+	Severity       string              `json:"severity"`
+	Status         string              `json:"status"`
+	AssigneeID     *uuid.UUID          `json:"assignee_id,omitempty"`
+	SourceAlertID  string              `json:"source_alert_id"`
+	RootCause      string              `json:"root_cause"`
+	Mitigation     string              `json:"mitigation"`
+	Timeline       []IncidentEvent     `json:"timeline,omitempty"`
+	Evidence       []IncidentEvidence  `json:"evidence,omitempty"`
+	AgentRuns      []AgentRun          `json:"agent_runs,omitempty"`
+	RCI            *IncidentRCI        `json:"rci,omitempty"`
+	RCA            *IncidentRCA        `json:"rca,omitempty"`
+	Postmortem     *IncidentPostmortem `json:"postmortem,omitempty"`
 	// AwaitingApprovalStage is set (e.g. "postmortem") while the pipeline is
 	// paused waiting for a human to approve the next stage via the HITL gate.
 	// Nil/empty when the pipeline isn't paused.
@@ -206,6 +213,13 @@ type Incident struct {
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
 	ResolvedAt            *time.Time `json:"resolved_at,omitempty"`
+}
+
+// FormatIncidentCode renders an incident's sequential per-org number as the
+// human-friendly "INC-0001" display code. Zero-padded to 4 digits but not
+// truncated -- number 12345 renders as "INC-12345", not clipped.
+func FormatIncidentCode(incidentNumber int64) string {
+	return fmt.Sprintf("INC-%04d", incidentNumber)
 }
 
 // UpdateIncidentRequest is the request body for updating an incident.
@@ -391,7 +405,7 @@ type CreateRCARequest struct {
 type IncidentPostmortem struct {
 	ID                        uuid.UUID       `json:"id"`
 	IncidentID                uuid.UUID       `json:"incident_id"`
-	RootCausewayD                     *uuid.UUID      `json:"rca_id,omitempty"`
+	RootCausewayD             *uuid.UUID      `json:"rca_id,omitempty"`
 	AgentRunID                *uuid.UUID      `json:"agent_run_id,omitempty"`
 	Status                    string          `json:"status"`
 	Title                     string          `json:"title"`
@@ -411,7 +425,7 @@ type IncidentPostmortem struct {
 
 // CreatePostmortemRequest is the request body for creating a postmortem.
 type CreatePostmortemRequest struct {
-	RootCausewayD                     *uuid.UUID      `json:"rca_id,omitempty"`
+	RootCausewayD             *uuid.UUID      `json:"rca_id,omitempty"`
 	AgentRunID                *uuid.UUID      `json:"agent_run_id,omitempty"`
 	Status                    string          `json:"status"`
 	Title                     string          `json:"title"`

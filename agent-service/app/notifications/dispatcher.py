@@ -301,8 +301,21 @@ class NotificationDispatcher:
 
         severity = data.get("severity", "unknown")
         incident_id = data.get("incident_id", "unknown")
+        incident_number = data.get("incident_number")
+        incident_title = data.get("title")
 
-        body_parts = [f"Incident: {incident_id}", f"Severity: {severity}"]
+        # "INC-0042 - Title" when we have both, matching the display format
+        # used everywhere in the frontend (see frontend/src/lib/incident.ts
+        # formatIncidentTitle) -- falls back to the raw UUID when the
+        # incident couldn't be fetched (best-effort lookup at the call site).
+        if incident_number is not None and incident_title:
+            incident_label = f"INC-{int(incident_number):04d} - {incident_title}"
+        elif incident_number is not None:
+            incident_label = f"INC-{int(incident_number):04d}"
+        else:
+            incident_label = str(incident_id)
+
+        body_parts = [f"Incident: {incident_label}", f"Severity: {severity}"]
         if data.get("root_cause"):
             body_parts.append(f"Root Cause: {data['root_cause']}")
         if data.get("summary"):

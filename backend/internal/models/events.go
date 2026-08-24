@@ -32,11 +32,12 @@ type AlertReceivedPayload struct {
 // published this event type at all (the Go ws.EventEmitter that was meant
 // to was built but never wired into any handler).
 type IncidentCreatedPayload struct {
-	IncidentID uuid.UUID `json:"incident_id"`
-	Title      string    `json:"title"`
-	Severity   string    `json:"severity"`
-	Status     string    `json:"status"`
-	SoftwareID uuid.UUID `json:"software_id"`
+	IncidentID     uuid.UUID `json:"incident_id"`
+	IncidentNumber int64     `json:"incident_number"`
+	Title          string    `json:"title"`
+	Severity       string    `json:"severity"`
+	Status         string    `json:"status"`
+	SoftwareID     uuid.UUID `json:"software_id"`
 }
 
 // IncidentUpdatedPayload is published (channel "incident.updated") on every

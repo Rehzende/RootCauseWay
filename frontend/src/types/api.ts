@@ -219,6 +219,10 @@ export interface IncidentEvidence {
 
 export interface Incident {
   id: string;
+  // Sequential per-org display number (e.g. 42 -> "INC-0042", see
+  // formatIncidentCode). Assigned once at creation, immutable; the UUID
+  // `id` above remains the real identifier for API paths and FKs.
+  incident_number: number;
   org_id: string;
   software_id: string;
   title: string;

@@ -28,6 +28,7 @@ import { PostmortemView } from '@/components/PostmortemView';
 import { OrchestratorDecisions } from '@/components/OrchestratorDecisions';
 import { WarRoomPanel } from '@/components/WarRoomPanel';
 import { ApprovalGateBanner } from '@/components/ApprovalGateBanner';
+import { formatIncidentCode } from '@/lib/incident';
 import type { IncidentStatus, AnalysisStatus, A2ATask } from '@/types/api';
 
 const statuses: IncidentStatus[] = ['open', 'investigating', 'mitigated', 'resolved', 'closed'];
@@ -458,7 +459,9 @@ export function IncidentDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-gray-900">{incident.title}</h1>
+              <h1 className="text-xl font-bold text-gray-900">
+                <span className="text-gray-400 font-semibold">{formatIncidentCode(incident.incident_number)}</span> - {incident.title}
+              </h1>
               <SeverityBadge severity={incident.severity} />
               <StatusBadge status={incident.status} />
             </div>

@@ -22,6 +22,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { SkeletonCard, SkeletonTable } from '@/components/Skeleton';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useToast } from '@/components/Toast';
+import { formatIncidentCode } from '@/lib/incident';
 
 const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low'];
 // Same hexes as SeverityBadge/AnalyticsPage -- one fixed categorical
@@ -217,10 +218,11 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['incidents', 'dashboard'] });
     }
     if (lastEvent.type === 'incident.created') {
-      const eventData = lastEvent.data as { title?: string } | undefined;
+      const eventData = lastEvent.data as { title?: string; incident_number?: number } | undefined;
+      const code = eventData?.incident_number ? `${formatIncidentCode(eventData.incident_number)} - ` : '';
       addToast({
         type: 'info',
-        title: `New incident: ${eventData?.title ?? 'Unknown'}`,
+        title: `New incident: ${code}${eventData?.title ?? 'Unknown'}`,
         action: lastEvent.incident_id
           ? { label: 'View', href: `/incidents/${lastEvent.incident_id}` }
           : undefined,
@@ -420,7 +422,9 @@ export function DashboardPage() {
                     className="cursor-pointer border-l-[3px] hover:bg-gray-50"
                     style={{ borderLeftColor: severityColors[inc.severity] }}
                   >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{inc.title}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      <span className="text-gray-400 font-normal">{formatIncidentCode(inc.incident_number)}</span> - {inc.title}
+                    </td>
                     <td className="px-4 py-3"><SeverityBadge severity={inc.severity} /></td>
                     <td className="px-4 py-3"><StatusBadge status={inc.status} /></td>
                     <td className="px-4 py-3 text-sm text-gray-500">{inc.software_id || '--'}</td>

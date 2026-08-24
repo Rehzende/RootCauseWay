@@ -182,12 +182,17 @@ class TestProcessEntry:
         mock_redis.xack.assert_awaited_once_with("rootcauseway:events", "warroom-service", b"1-0")
 
     async def test_created_event_notifies_channels(
-        self, consumer, mock_redis, mock_notifier, created_stream_fields,
+        self, consumer, mock_redis, mock_backend, mock_notifier, created_stream_fields,
         incident_id, org_id,
     ):
+        # get_incident is looked up so the notification can show "INC-0007 -
+        # Title" instead of the raw UUID (see NotificationDispatcher).
+        mock_backend.get_incident.return_value = {"incident_number": 7, "title": "Pulse checkout errors"}
+
         ok = await consumer._process_entry(b"1-0", created_stream_fields)
 
         assert ok is True
+        mock_backend.get_incident.assert_awaited_once()
         mock_notifier.notify.assert_awaited_once()
         call_args = mock_notifier.notify.await_args
         assert str(call_args.args[1]) == org_id
@@ -195,6 +200,8 @@ class TestProcessEntry:
         assert call_args.args[3] == "war_room_created"
         assert call_args.args[4] == {
             "incident_id": incident_id,
+            "incident_number": 7,
+            "title": "Pulse checkout errors",
             "severity": "high",
             "join_url": "https://teams.microsoft.com/l/meetup-join/abc",
         }
