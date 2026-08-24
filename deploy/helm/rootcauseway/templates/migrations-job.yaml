@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "rootcauseway.fullname" . }}-migrations-{{ .Release.Revision }}
+  labels:
+    {{- include "rootcauseway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "rootcauseway.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrations
+          image: "{{ .Values.migrations.image }}:{{ .Values.global.imageTag }}"
+          command: ["/app/rootcauseway-api", "migrate"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "rootcauseway.fullname" . }}-config
+            - secretRef:
+                name: {{ include "rootcauseway.fullname" . }}-secret

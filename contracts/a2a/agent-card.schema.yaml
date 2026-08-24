@@ -1,0 +1,166 @@
+# Google A2A Protocol - Agent Card Schema
+# Reference: https://google.github.io/A2A/
+
+AgentCard:
+  type: object
+  required: [name, url, version, skills]
+  properties:
+    name:
+      type: string
+      description: Human-readable agent name
+    description:
+      type: string
+    url:
+      type: string
+      format: uri
+      description: Agent's A2A endpoint base URL
+    version:
+      type: string
+    capabilities:
+      type: object
+      properties:
+        streaming:
+          type: boolean
+          default: false
+        pushNotifications:
+          type: boolean
+          default: false
+        stateTransitionHistory:
+          type: boolean
+          default: true
+    authentication:
+      type: object
+      properties:
+        schemes:
+          type: array
+          items:
+            type: string
+            enum: [none, bearer, api_key]
+    defaultInputModes:
+      type: array
+      items:
+        type: string
+      default: ["application/json"]
+    defaultOutputModes:
+      type: array
+      items:
+        type: string
+      default: ["application/json"]
+    skills:
+      type: array
+      items:
+        $ref: '#/AgentSkill'
+
+AgentSkill:
+  type: object
+  required: [id, name]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    description:
+      type: string
+    inputModes:
+      type: array
+      items:
+        type: string
+    outputModes:
+      type: array
+      items:
+        type: string
+    examples:
+      type: array
+      items:
+        type: string
+
+# A2A Task lifecycle
+Task:
+  type: object
+  required: [id, status]
+  properties:
+    id:
+      type: string
+      format: uuid
+    status:
+      type: string
+      enum: [submitted, working, input-required, completed, failed, canceled]
+    message:
+      $ref: '#/Message'
+    artifacts:
+      type: array
+      items:
+        $ref: '#/Artifact'
+
+Message:
+  type: object
+  required: [role, parts]
+  properties:
+    role:
+      type: string
+      enum: [user, agent]
+    parts:
+      type: array
+      items:
+        $ref: '#/Part'
+
+Part:
+  type: object
+  properties:
+    type:
+      type: string
+      enum: [text, data, file]
+    text:
+      type: string
+    data:
+      type: object
+    file:
+      type: object
+      properties:
+        name:
+          type: string
+        mimeType:
+          type: string
+        bytes:
+          type: string
+          format: base64
+
+Artifact:
+  type: object
+  required: [name, parts]
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    parts:
+      type: array
+      items:
+        $ref: '#/Part'
+
+# A2A JSON-RPC Methods
+Methods:
+  # Agent Card discovery
+  - method: agent/card
+    description: Returns the agent's Agent Card
+    response: AgentCard
+
+  # Task management
+  - method: tasks/send
+    description: Send a task to the agent
+    params:
+      id: string
+      message: Message
+    response: Task
+
+  - method: tasks/get
+    description: Get task status
+    params:
+      id: string
+    response: Task
+
+  - method: tasks/cancel
+    description: Cancel a running task
+    params:
+      id: string
+    response: Task

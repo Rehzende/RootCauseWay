@@ -1,0 +1,2647 @@
+openapi: 3.1.0
+info:
+  title: RootCauseway - Root Cause Analysis Intelligence
+  version: 0.1.0
+  description: Platform API for incident investigation and root cause analysis
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    # --- Auth ---
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    # --- Organization ---
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        pipeline_hitl_gate_enabled:
+          type: boolean
+          description: >
+            When true, the orchestrator pauses the pipeline before the
+            postmortem stage and waits for a human to POST
+            /incidents/{id}/approve-stage instead of auto-generating it.
+          default: false
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # --- User ---
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        created_at:
+          type: string
+          format: date-time
+
+    # --- Software Catalog ---
+    SoftwareEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        owner_id:
+          type: string
+          format: uuid
+        repository_url:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, deprecated, archived]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateSoftwareRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+        description:
+          type: string
+        owner_id:
+          type: string
+          format: uuid
+        repository_url:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    # --- Agent Registry ---
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [triage, evidence_analysis, hypothesis, debug, custom]
+        description:
+          type: string
+        config:
+          type: object
+          description: Agent-specific configuration (LLM model, tools, prompts)
+          properties:
+            model:
+              type: string
+            temperature:
+              type: number
+            tools:
+              type: array
+              items:
+                type: string
+            system_prompt:
+              type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAgentRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [triage, evidence_analysis, hypothesis, debug, custom]
+        description:
+          type: string
+        config:
+          type: object
+          properties:
+            model:
+              type: string
+            temperature:
+              type: number
+            tools:
+              type: array
+              items:
+                type: string
+            system_prompt:
+              type: string
+
+    # --- Webhook ---
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        source:
+          type: string
+          enum: [datadog, prometheus_alertmanager, grafana, otel, custom]
+        software_id:
+          type: string
+          format: uuid
+          description: Links webhook to a software catalog entry
+        endpoint_token:
+          type: string
+          description: Unique token used in the webhook URL path
+        secret:
+          type: string
+          description: Shared secret for signature validation
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateWebhookRequest:
+      type: object
+      required: [name, source, software_id]
+      properties:
+        name:
+          type: string
+        source:
+          type: string
+          enum: [datadog, prometheus_alertmanager, grafana, otel, custom]
+        software_id:
+          type: string
+          format: uuid
+
+    # --- Incident ---
+    Incident:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        software_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [critical, high, medium, low]
+        status:
+          type: string
+          enum: [open, investigating, mitigated, resolved, closed]
+        assignee_id:
+          type: string
+          format: uuid
+        source_alert_id:
+          type: string
+        root_cause:
+          type: string
+        mitigation:
+          type: string
+        timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentEvent'
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentEvidence'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+
+    IncidentEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [alert_received, triage_started, triage_completed, evidence_collected, hypothesis_generated, status_changed, comment, agent_action]
+        actor:
+          type: string
+          description: User name or agent name that produced this event
+        data:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    IncidentEvidence:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [log, metric, trace, snapshot, agent_output, manual]
+        title:
+          type: string
+        content:
+          type: object
+        source:
+          type: string
+        collected_at:
+          type: string
+          format: date-time
+
+    AlertSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        software_id:
+          type: string
+          format: uuid
+        raw_payload:
+          type: object
+        normalized:
+          $ref: '#/components/schemas/NormalizedAlert'
+        snapshots:
+          type: object
+          description: System state snapshots captured after alert
+        created_at:
+          type: string
+          format: date-time
+
+    NormalizedAlert:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [critical, high, medium, low]
+        source:
+          type: string
+          enum: [datadog, prometheus_alertmanager, grafana, otel, custom]
+        service:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        started_at:
+          type: string
+          format: date-time
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+
+    # --- Pagination ---
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+        total:
+          type: integer
+        page:
+          type: integer
+        per_page:
+          type: integer
+
+    # --- Error ---
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+
+    # --- SLO / Error Budget Tracking ---
+    SLODefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        software_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slo_type:
+          type: string
+          enum: [availability, latency, error_rate]
+        target_percentage:
+          type: number
+          format: double
+          example: 99.9
+        measurement_window_days:
+          type: integer
+          example: 30
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateSLODefinitionRequest:
+      type: object
+      required: [software_id, name, slo_type, target_percentage]
+      properties:
+        software_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slo_type:
+          type: string
+          enum: [availability, latency, error_rate]
+        target_percentage:
+          type: number
+          format: double
+          example: 99.9
+        measurement_window_days:
+          type: integer
+          default: 30
+
+    UpdateSLODefinitionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        slo_type:
+          type: string
+          enum: [availability, latency, error_rate]
+        target_percentage:
+          type: number
+          format: double
+        measurement_window_days:
+          type: integer
+
+    SLOStatus:
+      type: object
+      description: >
+        Computed, point-in-time error-budget status for one SLO definition.
+        See CalculateSLOStatus in backend/internal/services/slo_service.go
+        for the exact formulas.
+      properties:
+        slo_definition_id:
+          type: string
+          format: uuid
+        software_id:
+          type: string
+          format: uuid
+        slo_type:
+          type: string
+          enum: [availability, latency, error_rate]
+        target_percentage:
+          type: number
+          format: double
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        current_percentage:
+          type: number
+          format: double
+        error_budget_total_minutes:
+          type: number
+          format: double
+        error_budget_consumed_minutes:
+          type: number
+          format: double
+        error_budget_remaining_percentage:
+          type: number
+          format: double
+        status:
+          type: string
+          enum: [healthy, at_risk, exhausted]
+        incident_count:
+          type: integer
+        is_approximated:
+          type: boolean
+          description: >
+            True for slo_type=latency/error_rate, where there is no raw
+            request/latency metrics ingestion in this codebase and the
+            status is derived from incident-duration data as a proxy.
+
+    # --- Data Retention & Archival ---
+    RetentionPolicy:
+      type: object
+      description: >
+        Per-org, per-resource-type retention configuration. Governs how long
+        evidence, closed incidents, or agent runs are kept before a sweep
+        archives or deletes them. Suggested (not hardcoded) starting points:
+        evidence retention_days=90, incidents retention_days=365 -- every
+        org configures its own values via this API.
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+          enum: [evidence, incidents, agent_runs]
+        retention_days:
+          type: integer
+          minimum: 1
+          example: 90
+        action:
+          type: string
+          enum: [archive, delete]
+          description: >
+            "archive" snapshots the row to archived_records before deleting
+            it; "delete" hard-deletes with no snapshot.
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateRetentionPolicyRequest:
+      type: object
+      required: [resource_type, retention_days, action]
+      properties:
+        resource_type:
+          type: string
+          enum: [evidence, incidents, agent_runs]
+        retention_days:
+          type: integer
+          minimum: 1
+        action:
+          type: string
+          enum: [archive, delete]
+        enabled:
+          type: boolean
+          default: true
+
+    UpdateRetentionPolicyRequest:
+      type: object
+      description: All fields optional; only provided fields are changed.
+      properties:
+        retention_days:
+          type: integer
+          minimum: 1
+        action:
+          type: string
+          enum: [archive, delete]
+        enabled:
+          type: boolean
+
+    RetentionSweepResult:
+      type: object
+      properties:
+        policy_id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+        action:
+          type: string
+        matched_count:
+          type: integer
+        archived_count:
+          type: integer
+        deleted_count:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+
+    RetentionSweepSummary:
+      type: object
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetentionSweepResult'
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  # --- Auth ---
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --- Software Catalog ---
+  /software:
+    get:
+      tags: [Software Catalog]
+      summary: List software entries
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/SoftwareEntry'
+    post:
+      tags: [Software Catalog]
+      summary: Register software
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSoftwareRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareEntry'
+
+  /software/{id}:
+    get:
+      tags: [Software Catalog]
+      summary: Get software by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareEntry'
+        '404':
+          description: Not found
+    put:
+      tags: [Software Catalog]
+      summary: Update software
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSoftwareRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareEntry'
+    delete:
+      tags: [Software Catalog]
+      summary: Delete software
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  # --- Agents ---
+  /agents:
+    get:
+      tags: [Agent Registry]
+      summary: List agents
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [triage, evidence_analysis, hypothesis, debug, custom]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Agent'
+    post:
+      tags: [Agent Registry]
+      summary: Create agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+
+  /agents/{id}:
+    get:
+      tags: [Agent Registry]
+      summary: Get agent by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+    put:
+      tags: [Agent Registry]
+      summary: Update agent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+    delete:
+      tags: [Agent Registry]
+      summary: Delete agent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  # --- Webhooks ---
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhooks
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Webhook'
+    post:
+      tags: [Webhooks]
+      summary: Create webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+  /webhooks/{id}:
+    get:
+      tags: [Webhooks]
+      summary: Get webhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+    delete:
+      tags: [Webhooks]
+      summary: Delete webhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  # --- Webhook Ingestion (public, token-based) ---
+  /ingest/{token}:
+    post:
+      tags: [Ingestion]
+      summary: Receive alert via webhook
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '202':
+          description: Accepted
+        '404':
+          description: Unknown webhook token
+        '422':
+          description: Alert does not match any registered software
+
+  # --- Bidirectional Slack/Teams notifications ---
+  # Public webhooks (like /ingest/{token} above): called by Slack/Teams
+  # themselves, not by an authenticated RootCauseway user. Authenticity is
+  # established per-request instead of via JWT -- Slack's HMAC request
+  # signature / a shared Teams verification token, both configured on the
+  # notification_channels row that originally sent the interactive message
+  # (see NotificationChannel.config additive keys: signing_secret for
+  # slack, verification_token for teams).
+  /webhooks/slack/interactive:
+    post:
+      tags: [Notifications]
+      summary: Slack interactive component callback (Acknowledge / View RCA / Resolve)
+      description: >
+        Receives Slack's Block Kit `block_actions` payload (form-encoded,
+        JSON in the `payload` field) when a user clicks a button on an
+        incident notification message. Verifies X-Slack-Signature (HMAC-SHA256
+        over `v0:{timestamp}:{body}` using the channel's signing_secret) and
+        rejects requests whose timestamp is more than 5 minutes old, then
+        dispatches the action and records it in notification_interactions.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload:
+                  type: string
+                  description: JSON-encoded Slack interactive payload.
+      parameters:
+        - name: X-Slack-Request-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Slack-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Action dispatched; body is a Slack message (ephemeral reply)
+        '400':
+          description: Malformed payload / action value
+        '401':
+          description: Invalid or stale signature
+        '502':
+          description: Action dispatch failed (e.g. incident not found)
+
+  /webhooks/teams/interactive:
+    post:
+      tags: [Notifications]
+      summary: Teams Adaptive Card Action.Submit callback (Acknowledge / View RCA / Resolve)
+      description: >
+        Receives a minimal Bot Framework-style activity forwarded when a
+        user clicks an Action.Submit button on an Adaptive Card incident
+        notification: {"type":"message","value":{"incident_id","channel_id","action"},"from":{...}}.
+        Verified via a shared verification_token (Authorization: Bearer
+        <token> or X-Teams-Verification-Token header) configured on the
+        teams notification channel -- full Bot Framework JWT validation
+        against Azure AD is out of scope.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Action dispatched; body is a simple text reply
+        '400':
+          description: Malformed activity / missing action value
+        '401':
+          description: Invalid or missing verification token
+        '502':
+          description: Action dispatch failed (e.g. incident not found)
+
+  # --- Incidents ---
+  /incidents:
+    get:
+      tags: [Incidents]
+      summary: List incidents
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, investigating, mitigated, resolved, closed]
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [critical, high, medium, low]
+        - name: software_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Incident'
+
+  /incidents/{id}:
+    get:
+      tags: [Incidents]
+      summary: Get incident with full timeline and evidence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+    patch:
+      tags: [Incidents]
+      summary: Update incident (status, assignee, root cause, etc.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [open, investigating, mitigated, resolved, closed]
+                severity:
+                  type: string
+                  enum: [critical, high, medium, low]
+                assignee_id:
+                  type: string
+                  format: uuid
+                root_cause:
+                  type: string
+                mitigation:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+
+  /incidents/{id}/events:
+    post:
+      tags: [Incidents]
+      summary: Add event to incident timeline
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [comment, status_changed, agent_action]
+                data:
+                  type: object
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentEvent'
+
+  /incidents/{id}/evidence:
+    post:
+      tags: [Incidents]
+      summary: Add evidence to incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, title, content]
+              properties:
+                type:
+                  type: string
+                  enum: [log, metric, trace, snapshot, agent_output, manual]
+                title:
+                  type: string
+                content:
+                  type: object
+                source:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentEvidence'
+
+  /incidents/{id}/approve-stage:
+    post:
+      tags: [Incidents]
+      summary: Approve the pipeline stage an incident is currently paused on (HITL gate)
+      description: >
+        When an organization has pipeline_hitl_gate_enabled set, the orchestrator
+        pauses before running the postmortem stage and marks the incident's
+        awaiting_approval_stage. This endpoint lets an authenticated human approve
+        that stage, clearing awaiting_approval_stage and recording approved_by /
+        approved_at. On success, a pipeline.stage_approved event is published so
+        the agent-service can resume the run (see contracts/events/redis-events.yaml).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Stage approved; resume event published
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  incident_id:
+                    type: string
+                    format: uuid
+                  stage:
+                    type: string
+                    example: postmortem
+                  approved_by:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    example: approved
+        '401':
+          description: Authentication required
+        '409':
+          description: Incident is not currently awaiting approval
+
+  # --- Incident Cockpit ---
+  /incidents/{id}/full:
+    get:
+      tags: [Incident Cockpit]
+      summary: Get full incident with DAG, RCI, RCA, and postmortem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /incidents/{id}/dag:
+    get:
+      tags: [Incident Cockpit]
+      summary: Get agent execution DAG for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /incidents/{id}/runs:
+    get:
+      tags: [Incident Cockpit]
+      summary: List agent runs for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /incidents/{id}/rci:
+    get:
+      tags: [Incident Cockpit]
+      summary: Get Root Cause Investigation for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Incident Cockpit]
+      summary: Create RCI for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  /incidents/{id}/rca:
+    get:
+      tags: [Incident Cockpit]
+      summary: Get Root Cause Analysis for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Incident Cockpit]
+      summary: Create RCA for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  /incidents/{id}/postmortem:
+    get:
+      tags: [Incident Cockpit]
+      summary: Get postmortem for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Incident Cockpit]
+      summary: Create postmortem for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  /incidents/{id}/postmortem/export:
+    get:
+      tags: [Incident Cockpit]
+      summary: Export postmortem as Markdown or PDF
+      description: |
+        Renders the incident's postmortem (executive summary, timeline, root
+        cause, impact, lessons learned, what-went-well/wrong, action items,
+        prevention measures) as a downloadable document, for sharing outside
+        the platform (Confluence/Notion/email). Both formats are generated
+        from the same underlying postmortem data and differ only in
+        rendering.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          required: false
+          description: >
+            Output format. Defaults to `markdown` when omitted. A value
+            other than `markdown`/`pdf` returns 400.
+          schema:
+            type: string
+            enum: [markdown, pdf]
+            default: markdown
+      responses:
+        '200':
+          description: >
+            OK. `Content-Type` is `text/markdown` or `application/pdf`
+            depending on `format`; `Content-Disposition` is set to
+            `attachment; filename="postmortem-{incident-id}.{md|pdf}"`.
+          content:
+            text/markdown:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid incident id, or unrecognized `format` value
+        '404':
+          description: Postmortem not found for this incident
+
+  # --- A2A Agents ---
+  /a2a/agents:
+    get:
+      tags: [A2A Agents]
+      summary: List A2A agents
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [A2A Agents]
+      summary: Register A2A agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  /a2a/agents/{id}:
+    get:
+      tags: [A2A Agents]
+      summary: Get A2A agent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+    put:
+      tags: [A2A Agents]
+      summary: Update A2A agent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [A2A Agents]
+      summary: Delete A2A agent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  /a2a/agents/{id}/card:
+    get:
+      tags: [A2A Agents]
+      summary: Get A2A agent card (JSON-LD)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  # --- Skills ---
+  /skills:
+    get:
+      tags: [Skills]
+      summary: List skills
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Skills]
+      summary: Create skill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  /skills/{id}:
+    get:
+      tags: [Skills]
+      summary: Get skill
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+    put:
+      tags: [Skills]
+      summary: Update skill
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Skills]
+      summary: Delete skill
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  # --- Credentials ---
+  /credentials/providers:
+    get:
+      tags: [Credentials]
+      summary: List credential providers
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Credentials]
+      summary: Create credential provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  /credentials/leases:
+    get:
+      tags: [Credentials]
+      summary: List credential leases
+      parameters:
+        - name: incident_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /credentials/leases/request:
+    post:
+      tags: [Credentials]
+      summary: Request a credential lease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Lease created
+
+  # --- Auth (protected) ---
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current session
+      responses:
+        '200':
+          description: OK
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      responses:
+        '200':
+          description: OK
+
+  /auth/api-keys:
+    get:
+      tags: [Auth]
+      summary: List API keys
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Auth]
+      summary: Create API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- Users ---
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      responses:
+        '200':
+          description: OK
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+    put:
+      tags: [Users]
+      summary: Update user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Users]
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  # --- Roles ---
+  /roles:
+    get:
+      tags: [Roles]
+      summary: List roles
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Roles]
+      summary: Create role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- SSO Providers ---
+  /sso-providers:
+    get:
+      tags: [SSO]
+      summary: List SSO providers
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [SSO]
+      summary: Create SSO provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- Audit Log ---
+  /audit-log:
+    get:
+      tags: [Audit]
+      summary: List audit log entries
+      responses:
+        '200':
+          description: OK
+
+  # --- Feedback ---
+  /incidents/{id}/feedback:
+    get:
+      tags: [Feedback]
+      summary: List feedback for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Feedback]
+      summary: Submit feedback for incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- Knowledge Base ---
+  /knowledge-base:
+    get:
+      tags: [Knowledge Base]
+      summary: List knowledge base entries
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Knowledge Base]
+      summary: Create knowledge base entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  /knowledge-base/search:
+    post:
+      tags: [Knowledge Base]
+      summary: Search knowledge base entries
+      description: >
+        Semantic search when an embedding provider is configured (EMBEDDINGS_API_BASE);
+        falls back to ILIKE substring matching on error_pattern when disabled or on
+        embedding failure. Results include a `similarity` score only in the semantic path.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: Free-text query used for semantic search; falls back to error_pattern when empty.
+                error_pattern:
+                  type: string
+                  description: Also used as the ILIKE fallback match target.
+                software_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    category:
+                      type: string
+                    error_pattern:
+                      type: string
+                    root_cause_summary:
+                      type: string
+                    resolution:
+                      type: string
+                    similarity:
+                      type: number
+                      format: float
+                      nullable: true
+                      description: Cosine similarity (0-1). Present only when matched via embedding search; omitted on ILIKE fallback.
+
+  # --- Correlation Rules ---
+  /correlation-rules:
+    get:
+      tags: [Correlation]
+      summary: List correlation rules
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Correlation]
+      summary: Create correlation rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- Notification Channels ---
+  /notification-channels:
+    get:
+      tags: [Notifications]
+      summary: List notification channels
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Notifications]
+      summary: Create notification channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- Escalation Policies ---
+  /escalation-policies:
+    get:
+      tags: [Escalation]
+      summary: List escalation policies
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Escalation]
+      summary: Create escalation policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- Runbooks ---
+  /runbooks:
+    get:
+      tags: [Runbooks]
+      summary: List runbooks
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Runbooks]
+      summary: Create runbook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  /runbooks/{id}:
+    get:
+      tags: [Runbooks]
+      summary: Get runbook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+    put:
+      tags: [Runbooks]
+      summary: Update runbook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Runbooks]
+      summary: Delete runbook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  /runbooks/{id}/execute:
+    post:
+      tags: [Runbooks]
+      summary: Execute a runbook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Execution started
+
+  # --- Change Events ---
+  /change-events:
+    get:
+      tags: [Change Events]
+      summary: List change events
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Change Events]
+      summary: Create change event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- Analytics ---
+  /analytics/mttr:
+    get:
+      tags: [Analytics]
+      summary: Get Mean Time To Resolve metrics
+      responses:
+        '200':
+          description: OK
+
+  /analytics/trends:
+    get:
+      tags: [Analytics]
+      summary: Get incident trends
+      responses:
+        '200':
+          description: OK
+
+  /analytics/agent-effectiveness:
+    get:
+      tags: [Analytics]
+      summary: Get agent effectiveness metrics
+      responses:
+        '200':
+          description: OK
+
+  # --- SLO / Error Budget Tracking ---
+  /slo-definitions:
+    get:
+      tags: [SLO]
+      summary: List SLO definitions for the caller's org
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SLODefinition'
+    post:
+      tags: [SLO]
+      summary: Create an SLO definition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSLODefinitionRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SLODefinition'
+
+  /slo-definitions/{id}:
+    get:
+      tags: [SLO]
+      summary: Get an SLO definition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SLODefinition'
+        '404':
+          description: Not found
+    put:
+      tags: [SLO]
+      summary: Update an SLO definition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSLODefinitionRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SLODefinition'
+    delete:
+      tags: [SLO]
+      summary: Delete an SLO definition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  /slo-definitions/{id}/status:
+    get:
+      tags: [SLO]
+      summary: Get the computed error-budget status for an SLO definition
+      description: >
+        Computes current attainment and error-budget burn over the
+        definition's measurement window. For slo_type=availability this is
+        derived from incident open-duration within the window. For
+        slo_type=latency/error_rate, this codebase has no raw
+        request/latency metrics ingestion, so the same incident-derived
+        signal is used as a best-effort proxy -- the response is returned
+        with is_approximated=true in that case.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SLOStatus'
+        '404':
+          description: Not found
+
+  /software/{id}/slo-status:
+    get:
+      tags: [SLO]
+      summary: Get computed SLO statuses for all SLOs on a software entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  software_id:
+                    type: string
+                    format: uuid
+                  slos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SLOStatus'
+
+  # --- Access Policies ---
+  /access-policies:
+    get:
+      tags: [Access Policies]
+      summary: List access policies
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Access Policies]
+      summary: Create access policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+
+  # --- WebSocket ---
+  /ws:
+    get:
+      tags: [WebSocket]
+      summary: WebSocket connection for real-time events
+      description: |
+        Upgrades to a WebSocket connection for real-time event streaming.
+        Authentication is via JWT token passed as a query parameter.
+
+        **Client messages (JSON):**
+        - `{"action": "subscribe", "topics": ["incident:<uuid>"]}`  - Subscribe to specific incident updates
+        - `{"action": "unsubscribe", "topics": ["incident:<uuid>"]}` - Unsubscribe from topics
+        - `{"action": "ping"}` - Heartbeat, responds with `{"type": "pong"}`
+
+        **Server events (JSON):**
+        - `incident.created` - New incident created
+        - `incident.updated` - Incident updated
+        - `agent.status` - Agent execution status change
+        - `rca.completed` - Root cause analysis completed
+        - `postmortem.generated` - Postmortem generated
+        - `feedback.received` - Feedback submitted
+
+        Each event has: `type`, `incident_id`, `data`, `timestamp`
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: JWT authentication token
+          schema:
+            type: string
+      responses:
+        '101':
+          description: Switching Protocols (WebSocket upgrade)
+        '401':
+          description: Unauthorized - invalid or missing token
+
+  # --- Organization Settings ---
+  /organizations/{id}/settings:
+    get:
+      tags: [Organizations]
+      summary: Get organization-level pipeline settings
+      description: >
+        Public, JWT-authenticated counterpart to the internal settings
+        lookup used by agent-service. Lets the frontend load the current
+        pipeline_hitl_gate_enabled value (e.g. on Settings page mount).
+        Callers may only read their own organization.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_id:
+                    type: string
+                    format: uuid
+                  pipeline_hitl_gate_enabled:
+                    type: boolean
+        '403':
+          description: Cannot read another organization's settings
+        '404':
+          description: Organization not found
+    patch:
+      tags: [Organizations]
+      summary: Update organization-level pipeline settings
+      description: >
+        Currently supports toggling pipeline_hitl_gate_enabled, which gates
+        the postmortem stage behind human approval (see
+        /incidents/{id}/approve-stage). Callers may only update their own
+        organization (enforced from the authenticated org context).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pipeline_hitl_gate_enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_id:
+                    type: string
+                    format: uuid
+                  pipeline_hitl_gate_enabled:
+                    type: boolean
+        '403':
+          description: Cannot modify another organization's settings
+        '404':
+          description: Organization not found
+
+  # --- War Room ---
+  # Microsoft Teams meetings spun up from an incident, with post-meeting
+  # transcript/attendance capture and LLM summarization. See
+  # backend/internal/integrations/teams for provider selection (real Graph
+  # API vs MockTeamsClient vs NoopTeamsClient) and
+  # contracts/events/redis-events.yaml for warroom.meeting.ended.
+  /incidents/{id}/warroom:
+    post:
+      tags: [War Room]
+      summary: Create a Teams meeting ("war room") for an incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Created
+        '502':
+          description: Teams provider not configured or the create-meeting call failed
+    get:
+      tags: [War Room]
+      summary: Get the current war room meeting for an incident (status, join URL, summary once available)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: No war room meeting found for this incident
+
+  /warroom/{meetingId}/end:
+    post:
+      tags: [War Room]
+      summary: Mark a war room meeting ended; fetch transcript + attendance from Teams; publish warroom.meeting.ended
+      description: >
+        v1 limitation: manual trigger only. There is no real Graph
+        subscription webhook receiver available without an Azure AD tenant
+        in this environment, so meeting-end detection is triggered by the
+        on-call user calling this endpoint (e.g. from the frontend "end war
+        room" button) instead of a Graph change notification. The handler
+        delegates to the same WarRoomService.EndWarRoom method a future
+        webhook receiver would call.
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Meeting not found
+
+  /internal/warroom/{meetingId}:
+    get:
+      tags: [War Room]
+      summary: (internal) Fetch a war room meeting by ID, including raw_transcript
+      description: Used by agent-service to fetch the transcript after warroom.meeting.ended before summarizing.
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Meeting not found
+
+  /internal/warroom/{meetingId}/summary:
+    patch:
+      tags: [War Room]
+      summary: (internal) Write back the LLM-generated summary + participant list
+      description: Called by agent-service once it has summarized the transcript. Sets status to "summarized".
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [summary]
+              properties:
+                summary:
+                  type: object
+                  required: [executive_summary]
+                  properties:
+                    executive_summary:
+                      type: string
+                    key_points:
+                      type: array
+                      items:
+                        type: string
+                    action_items:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          description:
+                            type: string
+                          owner_hint:
+                            type: string
+                participants:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      join_time:
+                        type: string
+                        format: date-time
+                      leave_time:
+                        type: string
+                        format: date-time
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Invalid request body
+        '404':
+          description: Meeting not found
+
+  # --- Data Retention & Archival ---
+  # v1 scope: there is no built-in scheduler in this environment. The sweep
+  # endpoint below is the mechanism for both manual, on-demand runs and (via
+  # an external cron, or a future in-process ticker) scheduled runs -- the
+  # underlying service logic (RunRetentionSweep) is schedule-agnostic.
+  /retention-policies:
+    get:
+      tags: [Retention]
+      summary: List retention policies for the caller's organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RetentionPolicy'
+    post:
+      tags: [Retention]
+      summary: Create a retention policy for a resource type
+      description: >
+        At most one policy per (org, resource_type) -- creating a second
+        policy for a resource_type that already has one fails.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRetentionPolicyRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicy'
+        '400':
+          description: Invalid request body
+
+  /retention-policies/{id}:
+    put:
+      tags: [Retention]
+      summary: Update a retention policy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRetentionPolicyRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicy'
+        '403':
+          description: Policy belongs to another organization
+        '404':
+          description: Policy not found
+    delete:
+      tags: [Retention]
+      summary: Delete a retention policy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '403':
+          description: Policy belongs to another organization
+        '404':
+          description: Policy not found
+
+  /retention-policies/sweep:
+    post:
+      tags: [Retention]
+      summary: Manually trigger a retention sweep for the caller's organization
+      description: >
+        Loads the caller's enabled retention policies and, per policy, finds
+        expired records (evidence collected_at, or resolved/closed incidents'
+        resolved_at, or agent_runs created_at, older than retention_days) and
+        either archives them (snapshot to archived_records, then delete) or
+        hard-deletes them, depending on the policy's action.
+
+        v1 scope: this manual trigger is the only way to run a sweep in this
+        environment -- there is no cron/ticker wired up. It exists so that
+        when scheduling infra is added later (an in-process ticker in
+        main.go, or an external cron), it can call the same underlying
+        service method (RunRetentionSweep) that backs this endpoint, or hit
+        this endpoint directly, without any service-layer changes.
+      responses:
+        '200':
+          description: Sweep completed (individual record failures are reported per-policy, not as a 5xx)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionSweepSummary'

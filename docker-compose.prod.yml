@@ -1,0 +1,282 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./contracts/schemas/database.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-rootcauseway} -d $${POSTGRES_DB:-rootcauseway}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+        reservations:
+          memory: 256m
+    networks:
+      - rootcauseway-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+        reservations:
+          memory: 64m
+    networks:
+      - rootcauseway-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    image: rootcauseway/backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/rootcauseway-api", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+        reservations:
+          memory: 128m
+    networks:
+      - rootcauseway-network
+
+  agent-service:
+    build:
+      context: ./agent-service
+      dockerfile: Dockerfile
+      target: runtime
+    image: rootcauseway/agent-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+      BACKEND_API_URL: http://backend:8080/api/v1
+      PORT: "8081"
+    ports:
+      - "8081:8081"
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+        reservations:
+          memory: 256m
+    networks:
+      - rootcauseway-network
+
+  triage-agent:
+    build:
+      context: ./agents/triage-agent
+      dockerfile: Dockerfile
+      target: runtime
+    image: rootcauseway/triage-agent:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      BACKEND_API_URL: http://backend:8080/api/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+    networks:
+      - rootcauseway-network
+
+  evidence-agent:
+    build:
+      context: ./agents/evidence-agent
+      dockerfile: Dockerfile
+      target: runtime
+    image: rootcauseway/evidence-agent:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      BACKEND_API_URL: http://backend:8080/api/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+    ports:
+      - "8091:8091"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+    networks:
+      - rootcauseway-network
+
+  rca-agent:
+    build:
+      context: ./agents/rca-agent
+      dockerfile: Dockerfile
+      target: runtime
+    image: rootcauseway/rca-agent:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      BACKEND_API_URL: http://backend:8080/api/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+    ports:
+      - "8092:8092"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8092/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+    networks:
+      - rootcauseway-network
+
+  postmortem-agent:
+    build:
+      context: ./agents/postmortem-agent
+      dockerfile: Dockerfile
+      target: runtime
+    image: rootcauseway/postmortem-agent:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      BACKEND_API_URL: http://backend:8080/api/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+    ports:
+      - "8093:8093"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8093/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+    networks:
+      - rootcauseway-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runtime
+    image: rootcauseway/frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.25"
+        reservations:
+          memory: 32m
+    networks:
+      - rootcauseway-network
+
+volumes:
+  postgres_data:
+    name: rootcauseway_postgres_data
+  redis_data:
+    name: rootcauseway_redis_data
+
+networks:
+  rootcauseway-network:
+    name: rootcauseway-network
+    driver: bridge

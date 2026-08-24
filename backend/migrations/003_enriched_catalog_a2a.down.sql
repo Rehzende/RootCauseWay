@@ -1,0 +1,14 @@
+DROP TABLE IF EXISTS orchestrator_decisions;
+DROP TABLE IF EXISTS a2a_tasks;
+DROP TABLE IF EXISTS a2a_agents;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS pipeline_url;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS cloud_provider;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS cloud_resources;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS database_info;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS infra_details;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS stakeholders;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS sre_team;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS architects;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS runbook_url;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS dashboard_url;
+ALTER TABLE software_catalog DROP COLUMN IF EXISTS dependencies;

@@ -1,0 +1,1 @@
+ALTER TABLE a2a_agents DROP COLUMN IF EXISTS is_system;

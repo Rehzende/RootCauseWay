@@ -1,0 +1,50 @@
+{{- range $name, $agent := .Values.agents }}
+{{- if $agent.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rootcauseway.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "rootcauseway.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}-agent
+spec:
+  replicas: {{ $agent.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "rootcauseway.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $name }}-agent
+  template:
+    metadata:
+      labels:
+        {{- include "rootcauseway.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $name }}-agent
+    spec:
+      containers:
+        - name: {{ $name }}-agent
+          image: "{{ $agent.image }}:{{ $.Values.global.imageTag }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $agent.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "rootcauseway.fullname" $ }}-config
+            - secretRef:
+                name: {{ include "rootcauseway.fullname" $ }}-secret
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ $agent.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ $agent.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            {{- toYaml $agent.resources | nindent 12 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,21 @@
+RootCauseway has been installed successfully!
+
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+  https://{{ .Values.ingress.host }}
+{{- else }}
+  kubectl port-forward svc/{{ include "rootcauseway.fullname" . }}-frontend {{ .Values.frontend.port }}:{{ .Values.frontend.port }}
+  kubectl port-forward svc/{{ include "rootcauseway.fullname" . }}-backend {{ .Values.backend.port }}:{{ .Values.backend.port }}
+
+  Then open http://localhost:{{ .Values.frontend.port }}
+{{- end }}
+
+2. Check deployment status:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+3. View logs:
+  kubectl logs -l app.kubernetes.io/component=backend -f
+  kubectl logs -l app.kubernetes.io/component=orchestrator -f
+
+4. API docs available at:
+  http://<backend-host>:{{ .Values.backend.port }}/api/docs

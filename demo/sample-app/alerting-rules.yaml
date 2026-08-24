@@ -1,0 +1,76 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: demo-store-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: demo-store.rules
+      rules:
+        - alert: HighPodCPU
+          expr: |
+            sum(rate(container_cpu_usage_seconds_total{namespace="demo-store"}[5m])) by (pod) > 0.8
+          for: 2m
+          labels:
+            severity: high
+            service: demo-store
+          annotations:
+            summary: "High CPU usage on pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} CPU usage is above 80% for 2 minutes."
+
+        - alert: PodMemoryHigh
+          expr: |
+            sum(container_memory_working_set_bytes{namespace="demo-store"}) by (pod) / sum(container_spec_memory_limit_bytes{namespace="demo-store"}) by (pod) > 0.85
+          for: 1m
+          labels:
+            severity: critical
+            service: demo-store
+          annotations:
+            summary: "Memory usage critical on pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} memory at {{ $value | humanizePercentage }} of limit."
+
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total{namespace="demo-store"}[15m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+            service: demo-store
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash looping"
+            description: "Pod {{ $labels.pod }} has been restarting frequently in the last 15 minutes."
+
+        - alert: PodNotReady
+          expr: |
+            kube_pod_status_ready{namespace="demo-store", condition="true"} == 0
+          for: 3m
+          labels:
+            severity: high
+            service: demo-store
+          annotations:
+            summary: "Pod {{ $labels.pod }} is not ready"
+            description: "Pod {{ $labels.pod }} has been not ready for 3 minutes."
+
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(nginx_http_requests_total{namespace="demo-store", status=~"5.."}[5m])) / sum(rate(nginx_http_requests_total{namespace="demo-store"}[5m])) > 0.05
+          for: 2m
+          labels:
+            severity: high
+            service: demo-store
+          annotations:
+            summary: "High 5xx error rate in demo-store"
+            description: "More than 5% of requests are returning 5xx errors."
+
+        - alert: ServiceDown
+          expr: |
+            up{job=~".*demo-store.*"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            service: demo-store
+          annotations:
+            summary: "Service {{ $labels.job }} is down"
+            description: "Service {{ $labels.job }} has been unreachable for 1 minute."

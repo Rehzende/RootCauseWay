@@ -1,0 +1,122 @@
+global:
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+
+backend:
+  replicas: 2
+  image: ghcr.io/rootcauseway/backend
+  port: 8080
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  env: {}
+
+orchestrator:
+  replicas: 1
+  image: ghcr.io/rootcauseway/agent-service
+  port: 8081
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  env: {}
+
+frontend:
+  replicas: 2
+  image: ghcr.io/rootcauseway/frontend
+  port: 80
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+agents:
+  triage:
+    enabled: true
+    replicas: 1
+    image: ghcr.io/rootcauseway/triage-agent
+    port: 8090
+    resources:
+      requests:
+        cpu: 250m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  evidence:
+    enabled: true
+    replicas: 1
+    image: ghcr.io/rootcauseway/evidence-agent
+    port: 8091
+    resources:
+      requests:
+        cpu: 250m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  rca:
+    enabled: true
+    replicas: 1
+    image: ghcr.io/rootcauseway/rca-agent
+    port: 8092
+    resources:
+      requests:
+        cpu: 250m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  postmortem:
+    enabled: true
+    replicas: 1
+    image: ghcr.io/rootcauseway/postmortem-agent
+    port: 8093
+    resources:
+      requests:
+        cpu: 250m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+postgresql:
+  enabled: true
+  auth:
+    database: rootcauseway
+    username: rootcauseway
+    password: ""  # set via --set or secrets
+  primary:
+    persistence:
+      size: 10Gi
+
+redis:
+  enabled: true
+  architecture: standalone
+
+ingress:
+  enabled: false
+  className: nginx
+  host: rootcauseway.example.com
+  tls: false
+  annotations: {}
+
+secrets:
+  jwtSecret: ""
+  dbPassword: ""
+  redisPassword: ""
+  openaiApiKey: ""
+  anthropicApiKey: ""
+
+migrations:
+  image: ghcr.io/rootcauseway/backend

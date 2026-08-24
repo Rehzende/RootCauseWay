@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RootCauseway - Root Cause Analysis Intelligence</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            rootcauseway: {
+              900: '#0f172a',
+              800: '#1e293b',
+              700: '#334155',
+              600: '#475569',
+              500: '#64748b',
+              400: '#94a3b8',
+              300: '#cbd5e1',
+              accent: '#38bdf8',
+              green: '#4ade80',
+              purple: '#a78bfa',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .gradient-hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+    .card-hover { transition: transform 0.2s, box-shadow 0.2s; }
+    .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.3); }
+    .arch-box { border: 1px solid #475569; background: #1e293b; border-radius: 8px; padding: 12px 16px; text-align: center; font-size: 0.85rem; }
+    .arch-arrow { color: #38bdf8; font-size: 1.2rem; }
+  </style>
+</head>
+<body class="bg-rootcauseway-900 text-gray-200 font-sans">
+
+  <!-- Nav -->
+  <nav class="fixed top-0 w-full z-50 bg-rootcauseway-900/90 backdrop-blur border-b border-rootcauseway-700">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <span class="text-xl font-bold text-white">RootCauseway</span>
+      <div class="hidden md:flex gap-8 text-sm text-rootcauseway-400">
+        <a href="#how-it-works" class="hover:text-white">How It Works</a>
+        <a href="#features" class="hover:text-white">Features</a>
+        <a href="#architecture" class="hover:text-white">Architecture</a>
+        <a href="#pricing" class="hover:text-white">Pricing</a>
+      </div>
+      <a href="https://github.com/Rehzende/RootCauseway" class="text-rootcauseway-400 hover:text-white text-sm">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="gradient-hero pt-32 pb-20 px-6">
+    <div class="max-w-4xl mx-auto text-center">
+      <h1 class="text-5xl md:text-6xl font-bold text-white mb-6">RootCauseway &mdash; Root Cause Analysis Intelligence</h1>
+      <p class="text-xl md:text-2xl text-rootcauseway-400 mb-10 max-w-2xl mx-auto">Transform operational alerts into structured investigations. Automatically.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="docs/installation.md" class="bg-rootcauseway-accent hover:bg-sky-400 text-rootcauseway-900 font-semibold px-8 py-3 rounded-lg text-lg transition">Get Started</a>
+        <a href="http://localhost:3000" class="border border-rootcauseway-500 hover:border-rootcauseway-accent text-white px-8 py-3 rounded-lg text-lg transition">View Demo</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section id="how-it-works" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-3xl font-bold text-white text-center mb-16">How It Works</h2>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div class="text-center">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-rootcauseway-accent/20 flex items-center justify-center text-rootcauseway-accent text-2xl font-bold">1</div>
+          <h3 class="text-white font-semibold mb-2">Alert Arrives</h3>
+          <p class="text-rootcauseway-400 text-sm">Receive alerts from Datadog, Prometheus, Grafana, OTel</p>
+        </div>
+        <div class="text-center">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-rootcauseway-purple/20 flex items-center justify-center text-rootcauseway-purple text-2xl font-bold">2</div>
+          <h3 class="text-white font-semibold mb-2">AI Investigates</h3>
+          <p class="text-rootcauseway-400 text-sm">Orchestrator dispatches specialized A2A agents</p>
+        </div>
+        <div class="text-center">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-rootcauseway-green/20 flex items-center justify-center text-rootcauseway-green text-2xl font-bold">3</div>
+          <h3 class="text-white font-semibold mb-2">Root Cause Found</h3>
+          <p class="text-rootcauseway-400 text-sm">RCI, RCA with 5 Whys, confidence scoring</p>
+        </div>
+        <div class="text-center">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-yellow-400/20 flex items-center justify-center text-yellow-400 text-2xl font-bold">4</div>
+          <h3 class="text-white font-semibold mb-2">Postmortem Ready</h3>
+          <p class="text-rootcauseway-400 text-sm">Auto-generated blameless postmortem</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="py-20 px-6 bg-rootcauseway-800/50">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-3xl font-bold text-white text-center mb-16">Features</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-700 rounded-xl p-6">
+          <div class="text-rootcauseway-accent text-2xl mb-3">&#9881;</div>
+          <h3 class="text-white font-semibold mb-2">A2A Agent Orchestration</h3>
+          <p class="text-rootcauseway-400 text-sm">Google A2A protocol for multi-agent coordination. Triage, evidence collection, RCA, and postmortem agents work together.</p>
+        </div>
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-700 rounded-xl p-6">
+          <div class="text-rootcauseway-green text-2xl mb-3">&#36;</div>
+          <h3 class="text-white font-semibold mb-2">Mixed Model Cost Optimization</h3>
+          <p class="text-rootcauseway-400 text-sm">Route tasks to the right model. Use Haiku for triage, Sonnet for analysis, Opus for complex root cause reasoning.</p>
+        </div>
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-700 rounded-xl p-6">
+          <div class="text-rootcauseway-purple text-2xl mb-3">&#128274;</div>
+          <h3 class="text-white font-semibold mb-2">JIT Credential Vault</h3>
+          <p class="text-rootcauseway-400 text-sm">Just-in-time credentials for agent access to infrastructure. Scoped, time-limited, fully audited.</p>
+        </div>
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-700 rounded-xl p-6">
+          <div class="text-yellow-400 text-2xl mb-3">&#128218;</div>
+          <h3 class="text-white font-semibold mb-2">Skills Registry</h3>
+          <p class="text-rootcauseway-400 text-sm">Register and discover agent skills. Dynamic capability matching for investigation tasks.</p>
+        </div>
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-700 rounded-xl p-6">
+          <div class="text-red-400 text-2xl mb-3">&#128200;</div>
+          <h3 class="text-white font-semibold mb-2">Real-time Cockpit</h3>
+          <p class="text-rootcauseway-400 text-sm">Live dashboard showing active investigations, agent status, evidence trails, and confidence scores.</p>
+        </div>
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-700 rounded-xl p-6">
+          <div class="text-cyan-400 text-2xl mb-3">&#8635;</div>
+          <h3 class="text-white font-semibold mb-2">Loop Engineering</h3>
+          <p class="text-rootcauseway-400 text-sm">Feedback loops that improve investigation quality over time. Learn from past incidents to get faster and more accurate.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section id="architecture" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-3xl font-bold text-white text-center mb-16">Architecture</h2>
+      <div class="overflow-x-auto">
+        <div class="flex flex-col md:flex-row items-center justify-center gap-4 min-w-[600px] mx-auto">
+          <div class="arch-box text-rootcauseway-accent font-semibold">AlertManager<br><span class="text-xs text-rootcauseway-400">Prometheus / Datadog / Grafana</span></div>
+          <div class="arch-arrow hidden md:block">&rarr;</div>
+          <div class="arch-arrow md:hidden">&darr;</div>
+          <div class="arch-box text-white font-semibold">RootCauseway Backend<br><span class="text-xs text-rootcauseway-400">Go API + PostgreSQL</span></div>
+          <div class="arch-arrow hidden md:block">&rarr;</div>
+          <div class="arch-arrow md:hidden">&darr;</div>
+          <div class="arch-box text-rootcauseway-purple font-semibold">Orchestrator<br><span class="text-xs text-rootcauseway-400">LLM-routed + A2A</span></div>
+          <div class="arch-arrow hidden md:block">&rarr;</div>
+          <div class="arch-arrow md:hidden">&darr;</div>
+          <div class="flex flex-col gap-2">
+            <div class="arch-box text-xs">Triage Agent</div>
+            <div class="arch-box text-xs">Evidence Agent</div>
+            <div class="arch-box text-xs">RCA Agent</div>
+            <div class="arch-box text-xs">Postmortem Agent</div>
+          </div>
+          <div class="arch-arrow hidden md:block">&rarr;</div>
+          <div class="arch-arrow md:hidden">&darr;</div>
+          <div class="arch-box text-rootcauseway-green font-semibold">Cockpit<br><span class="text-xs text-rootcauseway-400">React Dashboard</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section class="py-12 px-6 bg-rootcauseway-800/50">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-xl font-semibold text-white mb-6">Tech Stack</h2>
+      <div class="flex flex-wrap justify-center gap-3">
+        <span class="bg-rootcauseway-700 text-rootcauseway-300 px-4 py-2 rounded-full text-sm">Go</span>
+        <span class="bg-rootcauseway-700 text-rootcauseway-300 px-4 py-2 rounded-full text-sm">Python</span>
+        <span class="bg-rootcauseway-700 text-rootcauseway-300 px-4 py-2 rounded-full text-sm">React</span>
+        <span class="bg-rootcauseway-700 text-rootcauseway-300 px-4 py-2 rounded-full text-sm">PostgreSQL</span>
+        <span class="bg-rootcauseway-700 text-rootcauseway-300 px-4 py-2 rounded-full text-sm">Redis</span>
+        <span class="bg-rootcauseway-700 text-rootcauseway-300 px-4 py-2 rounded-full text-sm">Google A2A Protocol</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-3xl font-bold text-white text-center mb-16">Pricing</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-700 rounded-xl p-8 text-center">
+          <h3 class="text-white font-semibold text-lg mb-2">Self-hosted</h3>
+          <div class="text-4xl font-bold text-rootcauseway-accent mb-4">Free</div>
+          <p class="text-rootcauseway-400 text-sm mb-6">Open source. Run on your own infrastructure.</p>
+          <ul class="text-sm text-rootcauseway-400 space-y-2 text-left mb-8">
+            <li>&#10003; All agents included</li>
+            <li>&#10003; Unlimited investigations</li>
+            <li>&#10003; Community support</li>
+            <li>&#10003; BYO LLM keys</li>
+          </ul>
+          <a href="docs/installation.md" class="block border border-rootcauseway-accent text-rootcauseway-accent hover:bg-rootcauseway-accent hover:text-rootcauseway-900 px-6 py-2 rounded-lg transition">Get Started</a>
+        </div>
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-accent rounded-xl p-8 text-center relative">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-rootcauseway-accent text-rootcauseway-900 text-xs font-bold px-3 py-1 rounded-full">COMING SOON</div>
+          <h3 class="text-white font-semibold text-lg mb-2">Cloud</h3>
+          <div class="text-4xl font-bold text-rootcauseway-accent mb-4">TBD</div>
+          <p class="text-rootcauseway-400 text-sm mb-6">Managed hosting. Zero ops.</p>
+          <ul class="text-sm text-rootcauseway-400 space-y-2 text-left mb-8">
+            <li>&#10003; Everything in Self-hosted</li>
+            <li>&#10003; Managed infrastructure</li>
+            <li>&#10003; Auto-scaling</li>
+            <li>&#10003; Email support</li>
+          </ul>
+          <span class="block border border-rootcauseway-600 text-rootcauseway-500 px-6 py-2 rounded-lg cursor-not-allowed">Coming Soon</span>
+        </div>
+        <div class="card-hover bg-rootcauseway-800 border border-rootcauseway-700 rounded-xl p-8 text-center">
+          <h3 class="text-white font-semibold text-lg mb-2">Enterprise</h3>
+          <div class="text-4xl font-bold text-rootcauseway-accent mb-4">Custom</div>
+          <p class="text-rootcauseway-400 text-sm mb-6">Dedicated support. SLAs. SSO.</p>
+          <ul class="text-sm text-rootcauseway-400 space-y-2 text-left mb-8">
+            <li>&#10003; Everything in Cloud</li>
+            <li>&#10003; SSO / SAML</li>
+            <li>&#10003; Dedicated support</li>
+            <li>&#10003; Custom integrations</li>
+          </ul>
+          <a href="mailto:contact@rootcauseway.dev" class="block border border-rootcauseway-accent text-rootcauseway-accent hover:bg-rootcauseway-accent hover:text-rootcauseway-900 px-6 py-2 rounded-lg transition">Contact Us</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-rootcauseway-700 py-10 px-6">
+    <div class="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-rootcauseway-500">
+      <div class="flex gap-6">
+        <a href="https://github.com/Rehzende/RootCauseway" class="hover:text-white">GitHub</a>
+        <a href="docs/" class="hover:text-white">Docs</a>
+      </div>
+      <p>Built with &#10084;&#65039; by the RootCauseway team</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+*.local
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+vendor/
+*.exe
+.DS_Store
+postgres_data/
+railwail-vars.json
+cli/bin/
+bin/
+.claude/settings.local.json
+backend/data/

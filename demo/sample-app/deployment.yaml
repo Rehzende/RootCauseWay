@@ -1,0 +1,250 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-store
+---
+# PostgreSQL for the store app
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-db
+  namespace: demo-store
+  labels:
+    app: store-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: store-db
+  template:
+    metadata:
+      labels:
+        app: store-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: store
+            - name: POSTGRES_USER
+              value: store
+            - name: POSTGRES_PASSWORD
+              value: store123
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-db
+  namespace: demo-store
+spec:
+  selector:
+    app: store-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+# Redis cache
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-cache
+  namespace: demo-store
+  labels:
+    app: store-cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: store-cache
+  template:
+    metadata:
+      labels:
+        app: store-cache
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-cache
+  namespace: demo-store
+spec:
+  selector:
+    app: store-cache
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+# Store API (Go-based sample app with intentional issues)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-api
+  namespace: demo-store
+  labels:
+    app: store-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: store-api
+  template:
+    metadata:
+      labels:
+        app: store-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          env:
+            - name: DB_HOST
+              value: store-db
+            - name: REDIS_HOST
+              value: store-cache
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-api
+  namespace: demo-store
+  labels:
+    app: store-api
+spec:
+  selector:
+    app: store-api
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# Store Frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-frontend
+  namespace: demo-store
+  labels:
+    app: store-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: store-frontend
+  template:
+    metadata:
+      labels:
+        app: store-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-frontend
+  namespace: demo-store
+spec:
+  selector:
+    app: store-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# Payment Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: demo-store
+  labels:
+    app: payment-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+        - name: payment
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              # Intentionally low memory limit to trigger OOM
+              cpu: 300m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: demo-store
+spec:
+  selector:
+    app: payment-service
+  ports:
+    - port: 80
+      targetPort: 80

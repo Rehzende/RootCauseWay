@@ -1,0 +1,330 @@
+# Redis Event Contracts
+#
+# Two transports are in use:
+#
+# 1. Redis Streams (durable, at-least-once) -- the primary transport for
+#    backend -> agent-service events. The backend dual-writes every event:
+#    XADD to the stream below AND PUBLISH on the legacy pub/sub channel.
+# 2. Redis Pub/Sub (ephemeral, fire-and-forget) -- kept for the backend
+#    WebSocket bridge (backend/internal/ws), which PSubscribes to "rootcauseway:*"
+#    and forwards events to connected browsers. Agent-service -> backend
+#    events (triage.completed, evidence.collected, hypothesis.generated,
+#    agent.status) remain pub/sub only.
+#
+# Channel naming (pub/sub): rootcauseway:{org_id}:{event_type}
+# All events are JSON-encoded with the envelope below.
+
+streams:
+  # Durable event stream (backend-go publisher -> agent-service consumer group)
+  events:
+    stream: "rootcauseway:events"                      # config: EVENT_STREAM_NAME / event_stream_name
+    publisher: backend-go
+    trimming: "XADD MAXLEN ~ 100000"           # approximate; config: EVENT_STREAM_MAXLEN
+    consumer_group:
+      name: "agent-service"                    # config: event_consumer_group
+      created_with: "XGROUP CREATE rootcauseway:events agent-service 0 MKSTREAM"
+      consumer_naming: "{hostname}-{pid}"      # unique per instance for multi-replica support
+      read: "XREADGROUP ... COUNT 10 BLOCK 1000 STREAMS rootcauseway:events >"
+      ack: "XACK only after successful processing"
+      recovery: "on startup, XAUTOCLAIM entries pending longer than 60s (event_autoclaim_idle_ms)"
+      retries: "3 retries with exponential backoff (event_max_retries, event_retry_backoff_base)"
+      consumed_event_types: [alert.received, evidence.uploaded, incident.resolved]
+      # Other event types on the stream are XACKed and skipped.
+    entry_fields:
+      type: object
+      required: [org_id, event_type, payload, published_at]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        payload:
+          type: string
+          description: >
+            Full JSON event envelope (see `envelope` below) -- byte-identical
+            to the message published on the pub/sub channel.
+        published_at:
+          type: string
+          format: date-time
+
+  # Dead-letter stream: messages that exhausted retries in agent-service.
+  events_dlq:
+    stream: "rootcauseway:events:dlq"                  # config: event_dlq_stream
+    publisher: agent-service-python
+    trimming: "XADD MAXLEN ~ 10000"            # config: event_dlq_maxlen
+    entry_fields:
+      description: >
+        All fields of the original entry (org_id, event_type, payload,
+        published_at) plus error metadata.
+      properties:
+        error:
+          type: string
+        error_type:
+          type: string
+        failed_at:
+          type: string
+          format: date-time
+        original_entry_id:
+          type: string
+          description: Entry ID in rootcauseway:events that failed.
+        consumer:
+          type: string
+          description: Consumer name ({hostname}-{pid}) that gave up.
+        retries:
+          type: string
+          description: Number of retries performed before dead-lettering.
+
+envelope:
+  type: object
+  required: [event_id, event_type, org_id, timestamp, payload]
+  properties:
+    event_id:
+      type: string
+      format: uuid
+    event_type:
+      type: string
+    org_id:
+      type: string
+      format: uuid
+    timestamp:
+      type: string
+      format: date-time
+    payload:
+      type: object
+
+events:
+  # Go → Python: New alert received, needs processing
+  # Durable delivery via the rootcauseway:events stream (see `streams` above);
+  # the pub/sub channel is dual-written for the WebSocket bridge.
+  alert.received:
+    channel: "rootcauseway:{org_id}:alert.received"
+    stream: "rootcauseway:events"
+    publisher: backend-go
+    subscriber: agent-service-python
+    payload:
+      type: object
+      required: [alert_snapshot_id, incident_id, software_id, normalized_alert]
+      properties:
+        alert_snapshot_id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        software_id:
+          type: string
+          format: uuid
+        webhook_source:
+          type: string
+          enum: [datadog, prometheus_alertmanager, grafana, otel, custom]
+        normalized_alert:
+          type: object
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+            severity:
+              type: string
+              enum: [critical, high, medium, low]
+            source:
+              type: string
+            service:
+              type: string
+            tags:
+              type: object
+            started_at:
+              type: string
+              format: date-time
+
+  # Python → Go: Triage completed
+  triage.completed:
+    channel: "rootcauseway:{org_id}:triage.completed"
+    publisher: agent-service-python
+    subscriber: backend-go
+    payload:
+      type: object
+      required: [incident_id, triage_result]
+      properties:
+        incident_id:
+          type: string
+          format: uuid
+        triage_result:
+          type: object
+          properties:
+            severity_assessment:
+              type: string
+              enum: [critical, high, medium, low]
+            category:
+              type: string
+            affected_components:
+              type: array
+              items:
+                type: string
+            suggested_assignee_id:
+              type: string
+              format: uuid
+            summary:
+              type: string
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+
+  # Python → Go: Evidence collected by agent
+  evidence.collected:
+    channel: "rootcauseway:{org_id}:evidence.collected"
+    publisher: agent-service-python
+    subscriber: backend-go
+    payload:
+      type: object
+      required: [incident_id, evidence]
+      properties:
+        incident_id:
+          type: string
+          format: uuid
+        evidence:
+          type: object
+          required: [type, title, content, source]
+          properties:
+            type:
+              type: string
+              enum: [log, metric, trace, snapshot, agent_output]
+            title:
+              type: string
+            content:
+              type: object
+            source:
+              type: string
+
+  # Python → Go: Hypothesis generated
+  hypothesis.generated:
+    channel: "rootcauseway:{org_id}:hypothesis.generated"
+    publisher: agent-service-python
+    subscriber: backend-go
+    payload:
+      type: object
+      required: [incident_id, hypothesis]
+      properties:
+        incident_id:
+          type: string
+          format: uuid
+        hypothesis:
+          type: object
+          properties:
+            root_cause:
+              type: string
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+            supporting_evidence:
+              type: array
+              items:
+                type: string
+                format: uuid
+            recommended_actions:
+              type: array
+              items:
+                type: string
+            mitigation_steps:
+              type: array
+              items:
+                type: string
+
+  # Go → Python: Human approved the pipeline stage the run was paused on
+  # (HITL gate, see /incidents/{id}/approve-stage in the OpenAPI contract).
+  # Published like every other backend-go event: dual-written to the
+  # rootcauseway:events durable stream AND the rootcauseway:{org_id}:pipeline.stage_approved
+  # pub/sub channel (see `streams.events` / publishDual above). The
+  # agent-service resume listener (app/orchestrator/resume_listener.py) may
+  # consume it either way; it is deliberately isolated from the
+  # "agent-service" consumer group used by app/workers/alert_worker.py --
+  # if it reads from the durable stream it MUST use its own consumer group
+  # (name: "pipeline-gate-service") so it doesn't steal/ack messages that
+  # belong to the alert-processing pipeline.
+  pipeline.stage_approved:
+    channel: "rootcauseway:{org_id}:pipeline.stage_approved"
+    stream: "rootcauseway:events"                        # dual-written; own consumer group if consumed from here
+    consumer_group: "pipeline-gate-service"       # only relevant if consuming via the stream, not pub/sub
+    publisher: backend-go
+    subscriber: agent-service-python
+    payload:
+      type: object
+      required: [incident_id, stage, approved_by]
+      properties:
+        incident_id:
+          type: string
+          format: uuid
+        stage:
+          type: string
+          description: The pipeline stage that was approved (currently always "postmortem").
+          example: postmortem
+        approved_by:
+          type: string
+          format: uuid
+          description: User ID of the human who approved the stage.
+
+  # Go → Python: War room meeting ended, transcript/attendance ready to summarize.
+  # Published by WarRoomService.EndWarRoom (backend/internal/services/warroom_service.go)
+  # once the meeting is marked ended and its transcript + attendance report
+  # have been fetched from Microsoft Graph (or MockTeamsClient in dev/test).
+  # Dual-written like every other backend-go event: XADD to rootcauseway:events AND
+  # PUBLISH on the pub/sub channel below. The agent-service War Room
+  # consumer (app/warroom/consumer.py) reads it off the durable stream via
+  # its own consumer group -- deliberately isolated from the "agent-service"
+  # group used by app/workers/alert_worker.py so it doesn't steal/ack
+  # messages belonging to the alert-processing pipeline (same isolation
+  # pattern as pipeline.stage_approved / pipeline-gate-service above).
+  #
+  # v1 limitation: there is no real Graph subscription webhook receiver in
+  # this environment, so this event is only ever emitted after a manual
+  # POST /api/v1/warroom/{meetingId}/end call (see the OpenAPI contract) --
+  # never from an actual Teams meeting-ended webhook.
+  warroom.meeting.ended:
+    channel: "rootcauseway:{org_id}:warroom.meeting.ended"
+    stream: "rootcauseway:events"                     # dual-written; own consumer group when consumed from here
+    consumer_group: "warroom-service"         # config: warroom_consumer_group
+    publisher: backend-go
+    subscriber: agent-service-python
+    payload:
+      type: object
+      required: [meeting_id, incident_id, external_meeting_id]
+      properties:
+        meeting_id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        external_meeting_id:
+          type: string
+          description: Provider-side (Teams/Graph) online meeting ID.
+
+  # Python → Go: Agent execution status update
+  agent.status:
+    channel: "rootcauseway:{org_id}:agent.status"
+    publisher: agent-service-python
+    subscriber: backend-go
+    payload:
+      type: object
+      required: [incident_id, agent_id, status]
+      properties:
+        incident_id:
+          type: string
+          format: uuid
+        agent_id:
+          type: string
+          format: uuid
+        agent_name:
+          type: string
+        status:
+          type: string
+          enum: [started, running, completed, failed]
+        message:
+          type: string
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100

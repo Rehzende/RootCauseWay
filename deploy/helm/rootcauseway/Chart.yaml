@@ -1,0 +1,18 @@
+apiVersion: v2
+name: rootcauseway
+description: RootCauseway - Root Cause Analysis Intelligence Platform
+version: 0.1.0
+appVersion: "0.1.0"
+type: application
+maintainers:
+  - name: RootCauseway Team
+    url: https://github.com/Rehzende/RootCauseway
+dependencies:
+  - name: postgresql
+    version: "~15.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "~19.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

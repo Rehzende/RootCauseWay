@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared-prometheus-tunnel
+  namespace: monitoring
+  labels: { app: cloudflared-prometheus-tunnel }
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: cloudflared-prometheus-tunnel }
+  template:
+    metadata:
+      labels: { app: cloudflared-prometheus-tunnel }
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          args:
+            - tunnel
+            - --url
+            - http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+            - --no-autoupdate
