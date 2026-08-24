@@ -100,7 +100,7 @@ func TestGraphTeamsClient_AppOnly_CreatesMeetingUnderOrganizerPath(t *testing.T)
 	withStubbedGraph(t, srv)
 
 	client := NewGraphTeamsClient("tenant", "client", "secret", "organizer-42")
-	id, joinURL, err := client.CreateMeeting(context.Background(), "Incident review")
+	id, joinURL, err := client.CreateMeeting(context.Background(), "Incident review", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "meeting-1", id)
@@ -129,9 +129,9 @@ func TestGraphTeamsClient_AppOnly_CachesTokenAcrossCalls(t *testing.T) {
 	withStubbedGraph(t, srv)
 
 	client := NewGraphTeamsClient("tenant", "client", "secret", "organizer")
-	_, _, err := client.CreateMeeting(context.Background(), "one")
+	_, _, err := client.CreateMeeting(context.Background(), "one", nil)
 	require.NoError(t, err)
-	_, _, err = client.CreateMeeting(context.Background(), "two")
+	_, _, err = client.CreateMeeting(context.Background(), "two", nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, tokenRequests, "a still-valid cached token must not be re-fetched")
@@ -148,7 +148,7 @@ func TestGraphTeamsClient_Delegated_CreatesMeetingUnderMePath(t *testing.T) {
 	withStubbedGraph(t, srv)
 
 	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "old-refresh-token", nil)
-	id, joinURL, err := client.CreateMeeting(context.Background(), "War room")
+	id, joinURL, err := client.CreateMeeting(context.Background(), "War room", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "meeting-2", id)
@@ -158,6 +158,78 @@ func TestGraphTeamsClient_Delegated_CreatesMeetingUnderMePath(t *testing.T) {
 	assert.Equal(t, "POST /me/events", seen[1], "delegated auth must create the meeting as the connected account, not an impersonated organizer")
 	assert.Contains(t, seen[2], "GET /me/onlineMeetings")
 	assert.Equal(t, "PATCH /me/onlineMeetings/meeting-2", seen[3])
+}
+
+// TestGraphTeamsClient_CreateMeeting_SendsAttendees_SkipsEmptyEmail guards
+// the war room "invite the affected software's stakeholders/SRE team" gap:
+// attendees passed to CreateMeeting must reach the POST /events body in
+// Graph's own attendee shape, and an attendee with no email (which Graph
+// would reject outright) must be dropped rather than sent.
+func TestGraphTeamsClient_CreateMeeting_SendsAttendees_SkipsEmptyEmail(t *testing.T) {
+	var gotEventBody createEventRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/oauth2/v2.0/token"):
+			_ = json.NewEncoder(w).Encode(oauthTokenResponse{AccessToken: "tok", ExpiresIn: 3600})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/events"):
+			_ = json.NewDecoder(r.Body).Decode(&gotEventBody)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":            "event-1",
+				"onlineMeeting": map[string]string{"joinUrl": "https://join"},
+			})
+		case r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{"value": []map[string]string{{"id": "meeting-1"}}})
+		case r.Method == http.MethodPatch:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer srv.Close()
+	withStubbedGraph(t, srv)
+
+	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "refresh-token", nil)
+	_, _, err := client.CreateMeeting(context.Background(), "War room", []Attendee{
+		{Name: "Alice", Email: "alice@example.com"},
+		{Name: "No Email"}, // must be dropped, Graph rejects an attendee with no address
+		{Name: "Bob", Email: "bob@example.com"},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, gotEventBody.Attendees, 2)
+	assert.Equal(t, "alice@example.com", gotEventBody.Attendees[0].EmailAddress.Address)
+	assert.Equal(t, "Alice", gotEventBody.Attendees[0].EmailAddress.Name)
+	assert.Equal(t, "required", gotEventBody.Attendees[0].Type)
+	assert.Equal(t, "bob@example.com", gotEventBody.Attendees[1].EmailAddress.Address)
+}
+
+func TestGraphTeamsClient_CreateMeeting_NoAttendees_OmitsField(t *testing.T) {
+	var gotRawBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/oauth2/v2.0/token"):
+			_ = json.NewEncoder(w).Encode(oauthTokenResponse{AccessToken: "tok", ExpiresIn: 3600})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/events"):
+			_ = json.NewDecoder(r.Body).Decode(&gotRawBody)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":            "event-1",
+				"onlineMeeting": map[string]string{"joinUrl": "https://join"},
+			})
+		case r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{"value": []map[string]string{{"id": "meeting-1"}}})
+		case r.Method == http.MethodPatch:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer srv.Close()
+	withStubbedGraph(t, srv)
+
+	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "refresh-token", nil)
+	_, _, err := client.CreateMeeting(context.Background(), "War room", nil)
+
+	require.NoError(t, err)
+	_, present := gotRawBody["attendees"]
+	assert.False(t, present, "attendees field should be omitted entirely, not sent as an empty array, when there are none")
 }
 
 func TestGraphTeamsClient_CreateMeeting_OnlineMeetingNeverAttaches_ErrorsAfterRetrying(t *testing.T) {
@@ -176,7 +248,7 @@ func TestGraphTeamsClient_CreateMeeting_OnlineMeetingNeverAttaches_ErrorsAfterRe
 	withStubbedGraph(t, srv)
 
 	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "refresh-token", nil)
-	_, _, err := client.CreateMeeting(context.Background(), "subject")
+	_, _, err := client.CreateMeeting(context.Background(), "subject", nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no online meeting join URL")
@@ -221,7 +293,7 @@ func TestGraphTeamsClient_CreateMeeting_RetriesUntilOnlineMeetingAttaches(t *tes
 	withStubbedGraph(t, srv)
 
 	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "refresh-token", nil)
-	id, joinURL, err := client.CreateMeeting(context.Background(), "subject")
+	id, joinURL, err := client.CreateMeeting(context.Background(), "subject", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "meeting-1", id)
@@ -249,7 +321,7 @@ func TestGraphTeamsClient_CreateMeeting_ResolveFails_Errors(t *testing.T) {
 	withStubbedGraph(t, srv)
 
 	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "refresh-token", nil)
-	_, _, err := client.CreateMeeting(context.Background(), "subject")
+	_, _, err := client.CreateMeeting(context.Background(), "subject", nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve online meeting")
@@ -281,7 +353,7 @@ func TestGraphTeamsClient_CreateMeeting_AutoRecordPatchFails_StillSucceeds(t *te
 	withStubbedGraph(t, srv)
 
 	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "refresh-token", nil)
-	id, joinURL, err := client.CreateMeeting(context.Background(), "subject")
+	id, joinURL, err := client.CreateMeeting(context.Background(), "subject", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "meeting-1", id)
@@ -313,7 +385,7 @@ func TestGraphTeamsClient_Delegated_PersistsRotatedRefreshToken(t *testing.T) {
 	}
 
 	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "old-refresh-token", persist)
-	_, _, err := client.CreateMeeting(context.Background(), "subject")
+	_, _, err := client.CreateMeeting(context.Background(), "subject", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, persistCalls)
@@ -345,7 +417,7 @@ func TestGraphTeamsClient_Delegated_DoesNotPersistWhenTokenUnchanged(t *testing.
 	}
 
 	client := NewGraphTeamsClientDelegated("tenant", "client", "secret", "same-refresh-token", persist)
-	_, _, err := client.CreateMeeting(context.Background(), "subject")
+	_, _, err := client.CreateMeeting(context.Background(), "subject", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, persistCalls, "must not persist when the refresh token didn't actually change")

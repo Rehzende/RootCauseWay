@@ -66,6 +66,30 @@ func (m *MockPublisher) Publish(ctx context.Context, channel string, event model
 	return m.Called(ctx, channel, event).Error(0)
 }
 
+type MockSoftwareReader struct{ mock.Mock }
+
+func (m *MockSoftwareReader) GetByID(ctx context.Context, id uuid.UUID) (*models.SoftwareEntry, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.SoftwareEntry), args.Error(1)
+}
+
+// capturingTeamsClient records the attendees CreateMeeting was called with.
+// Embeds teams.TeamsClient (nil) so it satisfies the interface without
+// implementing GetTranscript/GetAttendanceReport -- neither is exercised by
+// the tests that use this.
+type capturingTeamsClient struct {
+	teams.TeamsClient
+	gotAttendees []teams.Attendee
+}
+
+func (c *capturingTeamsClient) CreateMeeting(ctx context.Context, subject string, attendees []teams.Attendee) (string, string, error) {
+	c.gotAttendees = attendees
+	return "captured-id", "https://teams.microsoft.com/l/meetup-join/captured", nil
+}
+
 // fixedTeamsResolver wraps an already-constructed teams.TeamsClient as a
 // TeamsClientResolver that ignores orgID and always returns it -- these
 // tests exercise WarRoomService's own logic, not per-org resolution
@@ -107,6 +131,87 @@ func TestWarRoomService_CreateWarRoom(t *testing.T) {
 	assert.NotEmpty(t, meeting.JoinURL)
 	repo.AssertExpectations(t)
 	events.AssertExpectations(t)
+}
+
+func TestWarRoomService_CreateWarRoom_InvitesStakeholdersAndSREteam(t *testing.T) {
+	repo := new(MockWarRoomRepo)
+	incidents := new(MockIncidentReader)
+	software := new(MockSoftwareReader)
+	client := &capturingTeamsClient{}
+
+	svc := NewWarRoomService(repo, fixedTeamsResolver(client), incidents)
+	svc.SetSoftwareReader(software)
+
+	incidentID := uuid.New()
+	softwareID := uuid.New()
+	incident := &models.Incident{ID: incidentID, OrgID: uuid.New(), SoftwareID: softwareID, Title: "Checkout outage"}
+
+	stakeholders, _ := json.Marshal([]person{{Name: "Alice", Email: "alice@example.com"}})
+	sreTeam, _ := json.Marshal([]person{
+		{Name: "Bob", Email: "bob@example.com"},
+		{Name: "Alice (dup)", Email: "alice@example.com"}, // same email as a stakeholder -- must be deduped
+	})
+
+	incidents.On("GetByID", mock.Anything, incidentID).Return(incident, nil)
+	software.On("GetByID", mock.Anything, softwareID).Return(&models.SoftwareEntry{
+		Stakeholders: stakeholders, SreTeam: sreTeam,
+	}, nil)
+	repo.On("Create", mock.Anything, mock.AnythingOfType("*models.WarRoomMeeting")).Return(nil)
+
+	_, err := svc.CreateWarRoom(context.Background(), incidentID)
+
+	require.NoError(t, err)
+	require.Len(t, client.gotAttendees, 2)
+	var emails []string
+	for _, a := range client.gotAttendees {
+		emails = append(emails, a.Email)
+	}
+	assert.ElementsMatch(t, []string{"alice@example.com", "bob@example.com"}, emails)
+}
+
+func TestWarRoomService_CreateWarRoom_SoftwareLookupFails_StillCreatesMeeting(t *testing.T) {
+	repo := new(MockWarRoomRepo)
+	incidents := new(MockIncidentReader)
+	software := new(MockSoftwareReader)
+	teamsClient := teams.NewMockTeamsClient()
+
+	svc := NewWarRoomService(repo, fixedTeamsResolver(teamsClient), incidents)
+	svc.SetSoftwareReader(software)
+
+	incidentID := uuid.New()
+	softwareID := uuid.New()
+	incident := &models.Incident{ID: incidentID, OrgID: uuid.New(), SoftwareID: softwareID, Title: "x"}
+
+	incidents.On("GetByID", mock.Anything, incidentID).Return(incident, nil)
+	software.On("GetByID", mock.Anything, softwareID).Return(nil, errors.New("db down"))
+	repo.On("Create", mock.Anything, mock.AnythingOfType("*models.WarRoomMeeting")).Return(nil)
+
+	meeting, err := svc.CreateWarRoom(context.Background(), incidentID)
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, meeting.ExternalMeetingID)
+}
+
+func TestWarRoomService_meetingAttendees_SkipsMalformedAndEmptyEmail(t *testing.T) {
+	software := new(MockSoftwareReader)
+	svc := NewWarRoomService(nil, nil, nil)
+	svc.SetSoftwareReader(software)
+
+	softwareID := uuid.New()
+	software.On("GetByID", mock.Anything, softwareID).Return(&models.SoftwareEntry{
+		Stakeholders: json.RawMessage(`[{"name":"NoEmail"}, {"name":"Ok","email":"ok@example.com"}]`),
+		SreTeam:      json.RawMessage(`not-json`),
+	}, nil)
+
+	attendees := svc.meetingAttendees(context.Background(), softwareID)
+
+	require.Len(t, attendees, 1)
+	assert.Equal(t, "ok@example.com", attendees[0].Email)
+}
+
+func TestWarRoomService_meetingAttendees_NilReader_ReturnsNil(t *testing.T) {
+	svc := NewWarRoomService(nil, nil, nil)
+	assert.Nil(t, svc.meetingAttendees(context.Background(), uuid.New()))
 }
 
 func TestWarRoomService_CreateWarRoom_TeamsClientError(t *testing.T) {

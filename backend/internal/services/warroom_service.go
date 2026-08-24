@@ -34,6 +34,25 @@ type WarRoomIncidentEventAdder interface {
 	AddEvent(ctx context.Context, incidentID uuid.UUID, actor string, req models.CreateEventRequest) (*models.IncidentEvent, error)
 }
 
+// WarRoomSoftwareReader is the minimal software-catalog read surface used
+// to invite the affected software's stakeholders/SRE team to the war room
+// meeting. Optional: when nil, meetings are created with no invited
+// attendees (organizer only), same as before this existed.
+type WarRoomSoftwareReader interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.SoftwareEntry, error)
+}
+
+// person mirrors the frontend's Person shape (name/email, at minimum) that
+// SoftwareEntry.Stakeholders/SreTeam are stored as -- see SoftwarePage.tsx's
+// PersonListEditor. Unmarshaled locally rather than in models.SoftwareEntry
+// itself, which deliberately keeps those two fields as raw JSON (the
+// software catalog API passes them through opaquely; this is the first
+// caller that needs to actually read them structured).
+type person struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 // TeamsClientResolver builds a teams.TeamsClient for a given org, based on
 // that org's own configured Teams integration settings -- see
 // NewTeamsClientResolver, which is what production wires in. Replaces a
@@ -53,6 +72,7 @@ type WarRoomService struct {
 	incidents    WarRoomIncidentReader
 	events       WarRoomIncidentEventAdder // optional
 	publisher    EventPublisher            // optional
+	software     WarRoomSoftwareReader     // optional
 }
 
 func NewWarRoomService(repo WarRoomRepository, resolveTeams TeamsClientResolver, incidents WarRoomIncidentReader) *WarRoomService {
@@ -72,6 +92,49 @@ func (s *WarRoomService) SetEventPublisher(p EventPublisher) {
 	s.publisher = p
 }
 
+// SetSoftwareReader wires the optional software-catalog reader used to
+// invite the affected software's stakeholders/SRE team to the meeting.
+// When unset, meetings are created with no invited attendees.
+func (s *WarRoomService) SetSoftwareReader(r WarRoomSoftwareReader) {
+	s.software = r
+}
+
+// meetingAttendees resolves the affected software's stakeholders + SRE team
+// into a deduplicated attendee list for the Teams invite. Best-effort: a
+// software lookup failure or a software with no stakeholders/sre_team set
+// just means no attendees get invited, never a reason to fail meeting
+// creation itself.
+func (s *WarRoomService) meetingAttendees(ctx context.Context, softwareID uuid.UUID) []teams.Attendee {
+	if s.software == nil {
+		return nil
+	}
+	sw, err := s.software.GetByID(ctx, softwareID)
+	if err != nil {
+		slog.Warn("failed to load software for war room attendee list", "software_id", softwareID, "error", err)
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var attendees []teams.Attendee
+	for _, raw := range [][]byte{sw.Stakeholders, sw.SreTeam} {
+		if len(raw) == 0 {
+			continue
+		}
+		var people []person
+		if err := json.Unmarshal(raw, &people); err != nil {
+			continue // malformed/legacy shape -- skip rather than fail the whole meeting
+		}
+		for _, p := range people {
+			if p.Email == "" || seen[p.Email] {
+				continue
+			}
+			seen[p.Email] = true
+			attendees = append(attendees, teams.Attendee{Name: p.Name, Email: p.Email})
+		}
+	}
+	return attendees
+}
+
 // CreateWarRoom creates a Teams meeting for the given incident and
 // persists it as a new war_room_meetings row.
 func (s *WarRoomService) CreateWarRoom(ctx context.Context, incidentID uuid.UUID) (*models.WarRoomMeeting, error) {
@@ -86,7 +149,8 @@ func (s *WarRoomService) CreateWarRoom(ctx context.Context, incidentID uuid.UUID
 	}
 
 	subject := fmt.Sprintf("War Room: %s", incident.Title)
-	externalID, joinURL, err := client.CreateMeeting(ctx, subject)
+	attendees := s.meetingAttendees(ctx, incident.SoftwareID)
+	externalID, joinURL, err := client.CreateMeeting(ctx, subject, attendees)
 	if err != nil {
 		return nil, fmt.Errorf("create teams meeting: %w", err)
 	}

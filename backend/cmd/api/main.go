@@ -194,6 +194,7 @@ func main() {
 	warRoomSvc := services.NewWarRoomService(warRoomRepo, teamsResolver, incidentSvc)
 	warRoomSvc.SetIncidentEventAdder(incidentSvc)
 	warRoomSvc.SetEventPublisher(publisher)
+	warRoomSvc.SetSoftwareReader(softwareSvc)
 
 	// Teams delegated OAuth connect flow (see migration 027_teams_oauth):
 	// a service/bot Microsoft account authorizes RootCauseway once via a normal

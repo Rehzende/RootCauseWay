@@ -37,8 +37,10 @@ type Attendee struct {
 // API, mock, noop). Services depend on this interface only.
 type TeamsClient interface {
 	// CreateMeeting creates a new online meeting and returns its
-	// provider-side ID and a join URL.
-	CreateMeeting(ctx context.Context, subject string) (externalID, joinURL string, err error)
+	// provider-side ID and a join URL. attendees is best-effort: a nil or
+	// empty slice creates a meeting with no invited attendees (organizer
+	// only), same as before this parameter existed.
+	CreateMeeting(ctx context.Context, subject string, attendees []Attendee) (externalID, joinURL string, err error)
 	// GetTranscript returns the raw transcript text for an ended meeting.
 	GetTranscript(ctx context.Context, externalID string) (string, error)
 	// GetAttendanceReport returns the list of attendees for an ended
@@ -96,7 +98,7 @@ var errNotConfigured = fmt.Errorf(
 		"TEAMS_CLIENT_SECRET and TEAMS_ORGANIZER_USER_ID, or set WARROOM_MOCK_MODE=true for local dev",
 )
 
-func (c *NoopTeamsClient) CreateMeeting(ctx context.Context, subject string) (string, string, error) {
+func (c *NoopTeamsClient) CreateMeeting(ctx context.Context, subject string, attendees []Attendee) (string, string, error) {
 	return "", "", errNotConfigured
 }
 
@@ -121,7 +123,7 @@ type MockTeamsClient struct {
 
 func NewMockTeamsClient() *MockTeamsClient { return &MockTeamsClient{} }
 
-func (c *MockTeamsClient) CreateMeeting(ctx context.Context, subject string) (string, string, error) {
+func (c *MockTeamsClient) CreateMeeting(ctx context.Context, subject string, attendees []Attendee) (string, string, error) {
 	c.mu.Lock()
 	c.counter++
 	n := c.counter
@@ -466,6 +468,24 @@ type createEventRequest struct {
 	End                   eventDateTimeTZ `json:"end"`
 	IsOnlineMeeting       bool            `json:"isOnlineMeeting"`
 	OnlineMeetingProvider string          `json:"onlineMeetingProvider"`
+	// Attendees is omitted entirely (not sent as []) when there are none --
+	// Graph accepts a missing field the same as an empty array here, and
+	// omitting keeps the request identical to before this field existed for
+	// the common war-room-with-no-known-stakeholders case.
+	Attendees []graphAttendee `json:"attendees,omitempty"`
+}
+
+// graphAttendee is the Calendar Event resource's attendee shape (Graph API
+// "attendee" resource type) -- distinct from Attendee above, which is this
+// package's own shape for an *ended* meeting's attendance report.
+type graphAttendee struct {
+	EmailAddress graphEmailAddress `json:"emailAddress"`
+	Type         string            `json:"type"` // "required" | "optional" | "resource"
+}
+
+type graphEmailAddress struct {
+	Address string `json:"address"`
+	Name    string `json:"name,omitempty"`
 }
 
 type createEventResponse struct {
@@ -531,7 +551,7 @@ const warRoomCalendarBlockDuration = 4 * time.Hour
 // still created and still fully usable, just without auto-record
 // (whoever joins can still start transcription manually from the Teams
 // client, same as before this change).
-func (c *GraphTeamsClient) CreateMeeting(ctx context.Context, subject string) (string, string, error) {
+func (c *GraphTeamsClient) CreateMeeting(ctx context.Context, subject string, attendees []Attendee) (string, string, error) {
 	// Diagnostic, not fatal if it fails: the calendar itself declares
 	// which online meeting providers it'll actually honor
 	// (allowedOnlineMeetingProviders) -- if "teamsForBusiness" isn't in
@@ -551,12 +571,24 @@ func (c *GraphTeamsClient) CreateMeeting(ctx context.Context, subject string) (s
 	start := time.Now().UTC()
 	end := start.Add(warRoomCalendarBlockDuration)
 
+	var graphAttendees []graphAttendee
+	for _, a := range attendees {
+		if a.Email == "" {
+			continue // Graph rejects an attendee with no address at all
+		}
+		graphAttendees = append(graphAttendees, graphAttendee{
+			EmailAddress: graphEmailAddress{Address: a.Email, Name: a.Name},
+			Type:         "required",
+		})
+	}
+
 	eventReq := createEventRequest{
 		Subject:               subject,
 		Start:                 eventDateTimeTZ{DateTime: start.Format("2006-01-02T15:04:05.0000000"), TimeZone: "UTC"},
 		End:                   eventDateTimeTZ{DateTime: end.Format("2006-01-02T15:04:05.0000000"), TimeZone: "UTC"},
 		IsOnlineMeeting:       true,
 		OnlineMeetingProvider: "teamsForBusiness",
+		Attendees:             graphAttendees,
 	}
 	var eventResp createEventResponse
 	if err := c.doJSON(ctx, http.MethodPost, c.basePath+"/events", eventReq, &eventResp); err != nil {
