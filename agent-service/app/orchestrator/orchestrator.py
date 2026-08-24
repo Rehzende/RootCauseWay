@@ -807,7 +807,19 @@ class Orchestrator:
                     skill_selection_usage.get("total_tokens"),
                 )
         except Exception:
-            logger.warning("LLM skill selection failed, using default pipeline")
+            # Found live (2026-08-24 AKS chaos re-validation): this except
+            # swallowed the actual exception entirely -- no type, no
+            # message, no traceback -- so a real incident's skill selection
+            # silently degraded from a dynamic, cloud-aware LLM decision to
+            # the "call every available skill" default pipeline, and there
+            # was no way to tell why from the logs alone. This is arguably
+            # the highest-impact swallowed error in the whole orchestrator
+            # (it discards the entire point of LLM-routed dispatch), so it
+            # gets the same record_swallowed_error+logger.exception
+            # treatment as every other swallowed error here, not a bare
+            # logger.warning.
+            record_swallowed_error("orchestrator", "llm_skill_selection_failed")
+            logger.exception("LLM skill selection failed, using default pipeline")
             parsed = self._default_skill_decision(alert, available_skills)
 
         # Normalize: support both "skill_calls" and "agent_calls" keys
