@@ -43,8 +43,8 @@ View RCA / Resolve buttons wired back to the platform.
 
 ### War Room: a real Teams meeting, not a mocked link
 One click on an incident creates a genuine Microsoft Teams meeting via
-delegated OAuth (a connected service/bot account — no tenant-admin
-PowerShell step needed): the affected software's stakeholders and SRE team
+delegated OAuth against a connected service/bot account: the affected
+software's stakeholders and SRE team
 are resolved and invited automatically, recording/transcription is enabled
 on creation, and `war_room_created` fires the same notification path as any
 other incident event. Ending the meeting fetches the transcript and

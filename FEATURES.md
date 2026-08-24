@@ -638,8 +638,8 @@ Every notification is logged:
 
 One click on an incident creates a real Microsoft Teams meeting — not a
 mocked link, a genuine calendar event with a joinable Teams call attached,
-created via delegated OAuth (a connected service/bot Microsoft account, no
-tenant-admin PowerShell step required).
+created via delegated OAuth against a connected service/bot Microsoft
+account.
 
 **`POST /api/v1/incidents/:id/warroom`** — creates the meeting and:
 
