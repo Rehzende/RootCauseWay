@@ -699,6 +699,7 @@ func main() {
 	protected.GET("/organizations/:id/settings", pgh.GetOrgSettings)
 	protected.PATCH("/organizations/:id/settings", pgh.UpdateOrgSettings)
 	protected.POST("/organizations/:id/integrations/teams/oauth/authorize", toh.Authorize)
+	protected.POST("/organizations/:id/integrations/teams/oauth/disconnect", toh.Disconnect)
 
 	// Retention Policies (evidence / closed incidents / agent runs archival)
 	protected.GET("/retention-policies", rh.ListRetentionPolicies)

@@ -19,6 +19,7 @@ import (
 type teamsOAuthSettings interface {
 	GetOrgTeamsSettings(ctx context.Context, orgID uuid.UUID) (database.TeamsSettings, error)
 	SetOrgTeamsSettings(ctx context.Context, orgID uuid.UUID, s database.TeamsSettings) error
+	DisconnectTeams(ctx context.Context, orgID uuid.UUID) error
 }
 
 type teamsOAuthStateEntry struct {
@@ -134,4 +135,13 @@ func (s *TeamsOAuthService) HandleCallback(ctx context.Context, state, code stri
 	}
 
 	return entry.orgID, nil
+}
+
+// Disconnect clears orgID's connected Teams account (refresh token +
+// connected email), leaving the saved tenant_id/client_id/client_secret in
+// place so reconnecting later doesn't require re-entering the Azure AD app
+// registration. Idempotent -- disconnecting an already-disconnected org is
+// not an error.
+func (s *TeamsOAuthService) Disconnect(ctx context.Context, orgID uuid.UUID) error {
+	return s.settings.DisconnectTeams(ctx, orgID)
 }

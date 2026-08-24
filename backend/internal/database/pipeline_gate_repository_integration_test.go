@@ -130,3 +130,45 @@ func TestPgPipelineGateRepository_UpdateTeamsRefreshToken(t *testing.T) {
 		t.Fatalf("expected only RefreshToken to change: got %+v, want %+v", got, want)
 	}
 }
+
+// TestPgPipelineGateRepository_DisconnectTeams covers the "Disconnect"
+// button's backend path: refresh token + connected account email are
+// cleared, but tenant_id/client_id/client_secret stay saved so reconnecting
+// doesn't require re-entering the Azure AD app registration.
+func TestPgPipelineGateRepository_DisconnectTeams(t *testing.T) {
+	pool := setupTestDB(t)
+	orgID := createTestOrg(t, pool)
+
+	cipher, err := crypto.New("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+	if err != nil {
+		t.Fatalf("failed to build test cipher: %v", err)
+	}
+	repo := NewPipelineGateRepository(pool, cipher)
+	ctx := context.Background()
+
+	initial := TeamsSettings{
+		TenantID:              "tenant-123",
+		ClientID:              "client-456",
+		ClientSecret:          "app-secret",
+		RefreshToken:          "old-refresh-token",
+		ConnectedAccountEmail: "rootcauseway-bot@example.com",
+	}
+	if err := repo.SetOrgTeamsSettings(ctx, orgID, initial); err != nil {
+		t.Fatalf("SetOrgTeamsSettings failed: %v", err)
+	}
+
+	if err := repo.DisconnectTeams(ctx, orgID); err != nil {
+		t.Fatalf("DisconnectTeams failed: %v", err)
+	}
+
+	got, err := repo.GetOrgTeamsSettings(ctx, orgID)
+	if err != nil {
+		t.Fatalf("GetOrgTeamsSettings failed: %v", err)
+	}
+	want := initial
+	want.RefreshToken = ""
+	want.ConnectedAccountEmail = ""
+	if got != want {
+		t.Fatalf("expected only RefreshToken/ConnectedAccountEmail cleared: got %+v, want %+v", got, want)
+	}
+}

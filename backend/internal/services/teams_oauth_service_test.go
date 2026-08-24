@@ -31,6 +31,11 @@ func (m *mockTeamsOAuthSettings) SetOrgTeamsSettings(ctx context.Context, orgID 
 	return args.Error(0)
 }
 
+func (m *mockTeamsOAuthSettings) DisconnectTeams(ctx context.Context, orgID uuid.UUID) error {
+	args := m.Called(ctx, orgID)
+	return args.Error(0)
+}
+
 // withStubbedGraph mirrors the same-named helper in the teams package's own
 // tests -- these are exported package vars (teams.GraphBaseURL /
 // teams.MicrosoftLoginBaseURL), reachable from here specifically so
@@ -45,6 +50,18 @@ func withStubbedGraph(t *testing.T, srv *httptest.Server) {
 		teams.GraphBaseURL = origGraph
 		teams.MicrosoftLoginBaseURL = origLogin
 	})
+}
+
+func TestTeamsOAuthService_Disconnect_DelegatesToRepo(t *testing.T) {
+	settings := new(mockTeamsOAuthSettings)
+	orgID := uuid.New()
+	settings.On("DisconnectTeams", mock.Anything, orgID).Return(nil)
+
+	svc := NewTeamsOAuthService(settings, "https://api.example.com/callback")
+	err := svc.Disconnect(context.Background(), orgID)
+
+	require.NoError(t, err)
+	settings.AssertCalled(t, "DisconnectTeams", mock.Anything, orgID)
 }
 
 func TestTeamsOAuthService_InitiateConnect_ErrorsWhenAppRegistrationNotConfigured(t *testing.T) {

@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   listSSOProviders, createSSOProvider, updateSSOProvider, deleteSSOProvider,
   listAPIKeys, createAPIKey, deleteAPIKey, listRoles,
-  getOrganizationSettings, updateOrganizationSettings, initiateTeamsOAuth,
+  getOrganizationSettings, updateOrganizationSettings, initiateTeamsOAuth, disconnectTeamsOAuth,
 } from '@/services/api';
 import { PermissionGate } from '@/components/PermissionGate';
 import { useToast } from '@/components/Toast';
@@ -305,6 +305,21 @@ export function SettingsPage() {
     },
     onError: (err: any) => {
       addToast({ type: 'error', title: 'Failed to start Teams connection', message: err?.response?.data?.error || err.message });
+    },
+  });
+
+  // Clears the connected account only -- tenant/client/secret stay saved,
+  // so "Connect Teams account" reconnects without re-entering the Azure AD
+  // app registration. Before this existed, the only way to clear a stale/
+  // wrong connection was a direct UPDATE against Postgres.
+  const disconnectTeamsMut = useMutation({
+    mutationFn: () => disconnectTeamsOAuth(user!.org_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-settings', user?.org_id] });
+      addToast({ type: 'success', title: 'Teams account disconnected' });
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: 'Failed to disconnect Teams account', message: err?.response?.data?.error || err.message });
     },
   });
 
@@ -689,6 +704,16 @@ export function SettingsPage() {
                       ? 'Connecting...'
                       : orgSettings?.teams_configured ? 'Reconnect Teams account' : 'Connect Teams account'}
                   </button>
+                  {orgSettings?.teams_connected_account && (
+                    <button
+                      type="button"
+                      onClick={() => disconnectTeamsMut.mutate()}
+                      disabled={disconnectTeamsMut.isPending}
+                      className="mt-3 ml-3 rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {disconnectTeamsMut.isPending ? 'Disconnecting...' : 'Disconnect'}
+                    </button>
+                  )}
                 </PermissionGate>
               </div>
             </div>

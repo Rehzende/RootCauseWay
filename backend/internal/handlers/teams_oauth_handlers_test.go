@@ -35,6 +35,11 @@ func (m *mockTeamsOAuthRepo) SetOrgTeamsSettings(ctx context.Context, orgID uuid
 	return args.Error(0)
 }
 
+func (m *mockTeamsOAuthRepo) DisconnectTeams(ctx context.Context, orgID uuid.UUID) error {
+	args := m.Called(ctx, orgID)
+	return args.Error(0)
+}
+
 func setupTeamsOAuthRouter(toh *TeamsOAuthHandler, callerOrg uuid.UUID) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -46,6 +51,7 @@ func setupTeamsOAuthRouter(toh *TeamsOAuthHandler, callerOrg uuid.UUID) *gin.Eng
 	})
 	api := r.Group("/api/v1")
 	api.POST("/organizations/:id/integrations/teams/oauth/authorize", toh.Authorize)
+	api.POST("/organizations/:id/integrations/teams/oauth/disconnect", toh.Disconnect)
 	api.GET("/integrations/teams/oauth/callback", toh.Callback)
 	return r
 }
@@ -102,6 +108,40 @@ func TestTeamsOAuthHandler_Authorize_NotConfigured_ReturnsBadRequest(t *testing.
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestTeamsOAuthHandler_Disconnect_ClearsConnection(t *testing.T) {
+	repo := new(mockTeamsOAuthRepo)
+	orgID := uuid.New()
+	repo.On("DisconnectTeams", mock.Anything, orgID).Return(nil)
+
+	svc := services.NewTeamsOAuthService(repo, "https://api.example.com/callback")
+	toh := NewTeamsOAuthHandler(svc, "https://app.example.com")
+	r := setupTeamsOAuthRouter(toh, orgID)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/integrations/teams/oauth/disconnect", nil)
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	repo.AssertCalled(t, "DisconnectTeams", mock.Anything, orgID)
+}
+
+func TestTeamsOAuthHandler_Disconnect_RejectsOtherOrg(t *testing.T) {
+	repo := new(mockTeamsOAuthRepo)
+	orgID := uuid.New()
+	callerOrg := uuid.New()
+
+	svc := services.NewTeamsOAuthService(repo, "https://api.example.com/callback")
+	toh := NewTeamsOAuthHandler(svc, "https://app.example.com")
+	r := setupTeamsOAuthRouter(toh, callerOrg)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/integrations/teams/oauth/disconnect", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	repo.AssertNotCalled(t, "DisconnectTeams", mock.Anything, mock.Anything)
 }
 
 func TestTeamsOAuthHandler_Callback_MicrosoftDeniedConsent_RedirectsWithError(t *testing.T) {

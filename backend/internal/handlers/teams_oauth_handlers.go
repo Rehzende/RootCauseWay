@@ -51,6 +51,32 @@ func (h *TeamsOAuthHandler) Authorize(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"authorize_url": authorizeURL})
 }
 
+// Disconnect handles POST /api/v1/organizations/:id/integrations/teams/oauth/disconnect.
+// Protected (JWT), same tenant-isolation rule as Authorize/UpdateOrgSettings.
+// Clears the connected account only -- tenant_id/client_id/client_secret
+// stay saved, so reconnecting doesn't require re-entering the Azure AD app
+// registration.
+func (h *TeamsOAuthHandler) Disconnect(c *gin.Context) {
+	orgID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid organization id"})
+		return
+	}
+
+	if callerOrg := getOrgID(c); callerOrg != uuid.Nil && callerOrg != orgID {
+		c.JSON(http.StatusForbidden, models.ErrorResponse{Error: "cannot disconnect Teams for another organization"})
+		return
+	}
+
+	if err := h.Svc.Disconnect(c.Request.Context(), orgID); err != nil {
+		slog.Error("disconnect Teams failed", "request_id", c.GetString("request_id"), "org_id", orgID, "error", err.Error())
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"disconnected": true})
+}
+
 // Callback handles GET /api/v1/integrations/teams/oauth/callback. Public --
 // Microsoft's redirect carries no RootCauseway JWT, same reasoning as SSOCallback.
 // Always redirects the browser back to the frontend Settings page (never

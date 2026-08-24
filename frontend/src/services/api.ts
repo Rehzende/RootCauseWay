@@ -673,6 +673,13 @@ export const updateOrganizationSettings = (
 export const initiateTeamsOAuth = (orgId: string) =>
   api.post<{ authorize_url: string }>(`/organizations/${orgId}/integrations/teams/oauth/authorize`).then((r) => r.data);
 
+// Clears the connected Teams account (refresh token + connected email) --
+// tenant_id/client_id/client_secret stay saved, so reconnecting doesn't
+// require re-entering the Azure AD app registration. See
+// TeamsOAuthHandler.Disconnect.
+export const disconnectTeamsOAuth = (orgId: string) =>
+  api.post<{ disconnected: boolean }>(`/organizations/${orgId}/integrations/teams/oauth/disconnect`).then((r) => r.data);
+
 // --- Postmortem Export ---
 export const exportPostmortem = async (incidentId: string, format: 'markdown' | 'pdf') => {
   const res = await api.get(`/incidents/${incidentId}/postmortem/export`, {

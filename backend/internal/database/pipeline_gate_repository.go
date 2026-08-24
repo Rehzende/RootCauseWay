@@ -196,6 +196,23 @@ func (r *PgPipelineGateRepository) UpdateTeamsRefreshToken(ctx context.Context, 
 	return err
 }
 
+// DisconnectTeams clears the connected account (refresh token + connected
+// email) in isolation -- same narrow single-column-set UPDATE shape as
+// UpdateTeamsRefreshToken above, for the same reason: a full
+// SetOrgTeamsSettings read-then-overwrite risks clobbering a concurrent
+// settings edit. Deliberately leaves tenant_id/client_id/
+// client_secret_encrypted untouched -- disconnecting the account shouldn't
+// force re-entering the Azure AD app registration to reconnect later.
+// Before this existed, the only way to clear a stale/wrong connection was a
+// direct UPDATE against Postgres (see project backlog).
+func (r *PgPipelineGateRepository) DisconnectTeams(ctx context.Context, orgID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE organizations SET teams_refresh_token_encrypted = '', teams_connected_account_email = '', updated_at = NOW() WHERE id = $1`,
+		orgID,
+	)
+	return err
+}
+
 // MarkAwaitingApproval records that the incident's pipeline is paused before
 // the given stage, waiting for a human to approve it.
 func (r *PgPipelineGateRepository) MarkAwaitingApproval(ctx context.Context, incidentID uuid.UUID, stage string) error {
