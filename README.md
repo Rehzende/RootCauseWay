@@ -10,6 +10,10 @@ Plataforma que transforma alertas operacionais em investigação estruturada de 
 | Dashboard — visão geral do cenário de incidentes | Incidente — contexto do software afetado, progresso da análise |
 | ![RCA com 5 Whys](docs/screenshots/rca-analysis.jpg) | ![Integração Teams](docs/screenshots/teams-integration.jpg) |
 | Root Cause Analysis — causa raiz, fatores contribuintes, 5 Whys | Settings > Integrations — conexão Teams para War Room |
+| ![A2A Agents](docs/screenshots/agents.jpg) | ![War Room](docs/screenshots/warroom.jpg) |
+| Mesh de agentes A2A — saúde, config e skills de cada um | War Room — reunião Teams criada automaticamente pelo incidente |
+| ![Webhooks](docs/screenshots/webhooks.jpg) | |
+| Webhooks — ingestão de alertas (Alertmanager, Datadog, etc.) | |
 
 ## Quick Start
 
