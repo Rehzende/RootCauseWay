@@ -18,7 +18,7 @@
 9. [Knowledge Base & Feedback Loop](#9-knowledge-base--feedback-loop)
 10. [Observability Sources](#10-observability-sources)
 11. [Change Events](#11-change-events)
-12. [Notifications & Escalation](#12-notifications--escalation)
+12. [Notifications & Escalation, War Room (Teams)](#12-notifications--escalation)
 13. [Analytics](#13-analytics)
 14. [Agent Marketplace](#14-agent-marketplace)
 15. [Software Catalog](#15-software-catalog)
@@ -138,13 +138,22 @@ Every action on an incident is recorded as a timestamped event:
 | Event Type | Description |
 |---|---|
 | `alert_received` | Alert triggered the incident |
-| `triage_started` / `triage_completed` | Triage phase |
-| `evidence_collected` | Evidence artifact added |
-| `hypothesis_generated` | Hypothesis produced |
+| `triage_started` / `triage_completed` | Triage skill dispatched / completed |
+| `evidence_collected` | Evidence-collection skill completed |
+| `hypothesis_generated` | Hypothesis produced by the RCA agent |
+| `rci_started` / `rci_completed` | RCI dispatched / confirmed persisted |
+| `rca_started` / `rca_completed` | RCA dispatched / confirmed persisted |
+| `postmortem_started` / `postmortem_completed` | Postmortem dispatched / confirmed persisted |
+| `agent_run_started` / `agent_run_completed` / `agent_run_failed` | Generic per-skill dispatch signal — fires for every skill the orchestrator calls, including ones with no dedicated type above (`k8s-debug`, `azure-*`, custom skills) |
+| `correlated_alert` | A duplicate alert was correlated into this incident instead of opening a new one |
+| `war_room_created` | A Teams war room meeting was created for this incident |
 | `status_changed` | Lifecycle state change |
 | `comment` | Human comment |
 | `agent_action` | AI agent action |
-| `rci_created` / `rca_created` / `postmortem_created` | Analysis milestones |
+
+The `_started`/`_completed` pairs only emit for a call the orchestrator
+actually dispatches; `_completed` fires once the artifact is confirmed
+persisted, not just because the underlying A2A call returned successfully.
 
 ### Evidence Collection
 
@@ -189,31 +198,38 @@ Each `AgentRun` node records: agent used, status, input/output, model, tokens co
 
 ## 4. AI Investigation Pipeline
 
-The core AI pipeline runs 6 stages sequentially, with output from each stage feeding into the next.
+There is no fixed stage count or order. On `alert.received`, the orchestrator
+builds the incident's context (affected software, similar past incidents,
+evidence collected so far) and asks an LLM, on every iteration, which skill
+to call next and whether another one is needed — each call's result feeds
+the context for the next decision. Two incidents of the same alert type can
+dispatch different skill sets: a Kubernetes-labeled incident pulls in
+`k8s-debug`/`k8s-logs`; a cloud-hosted one pulls in `azure-*` skills instead.
+None of this is hardcoded into a sequence.
 
 ```
-Alert
-  │
-  ▼
-[1] Triage Agent ──────────► severity, category, affected components, confidence
-  │
-  ▼
-[2] Evidence Agent ─────────► evidence plan, data source recommendations, log queries
-  │
-  ▼
-[3] Hypothesis Agent ───────► hypothesis, recommended actions
-  │
-  ▼
-[4] RCI Generator ──────────► investigation narrative, impact, affected services, TTD
-  │
-  ▼
-[5] RCA Generator ──────────► root cause, contributing factors, five-whys, confidence
-  │
-  ▼
-[6] Postmortem Generator ───► blameless postmortem, action items, lessons learned
+Alert Received
+        │
+        ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  ORCHESTRATOR — an LLM decides the next skill to call, given the   │
+│  context accumulated so far (repeats until it decides it has       │
+│  enough, or an iteration limit is hit)                              │
+└────────────────────────────┬──────────────────────────────────────┘
+                             │ each call's result feeds the next decision
+                             ▼
+        (example skills, called 0–N times each, in whatever
+         order the LLM decides)
+┌─────────┐ ┌──────────┐ ┌─────┐ ┌────────────┐
+│ Triage  │ │ Evidence │ │ RCA │ │ Postmortem │  ...and others
+└─────────┘ └──────────┘ └─────┘ └────────────┘  (k8s-debug, azure-*, ...)
 ```
 
-### Stage 1 — Triage
+The RCA agent (port 8092) is the one that produces hypothesis, RCI and RCA
+together in a single call — not three separate stages — the orchestrator
+just extracts and persists each artifact from that one response.
+
+### Triage
 
 **Output: `IncidentRCI` triage section**
 
@@ -222,7 +238,7 @@ Alert
 - Affected component identification
 - Confidence score
 
-### Stage 2 — Evidence
+### Evidence
 
 **Output: Evidence collection plan**
 
@@ -231,16 +247,15 @@ Alert
 - Evidence priority: high / medium / low
 - Types of evidence to collect
 
-### Stage 3 — Hypothesis
+### RCA agent — hypothesis + Root Cause Investigation (RCI) + Root Cause Analysis (RCA)
 
-**Output: Structured hypothesis**
+A single call to this agent returns all three artifacts together:
 
-- Root cause hypothesis
-- Recommended investigation actions
+- **Hypothesis**: structured root cause hypothesis + recommended investigation actions.
+- **RCI** (`IncidentRCI`, below).
+- **RCA** (`IncidentRCA`, next section).
 
-### Stage 4 — Root Cause Investigation (RCI)
-
-**Output: `IncidentRCI`**
+**`IncidentRCI` fields:**
 
 | Field | Description |
 |---|---|
@@ -253,9 +268,7 @@ Alert
 | `acknowledgment_time` | Time to acknowledge |
 | `evidence_ids` | Referenced evidence artifacts |
 
-### Stage 5 — Root Cause Analysis (RCA)
-
-**Output: `IncidentRCA`**
+**`IncidentRCA` fields:**
 
 | Field | Description |
 |---|---|
@@ -266,7 +279,11 @@ Alert
 | `confidence_score` | AI confidence (0–1) |
 | `evidence_references` | Supporting evidence |
 
-### Stage 6 — Postmortem
+### Postmortem
+
+**Agent:** Postmortem Agent (port 8093). Runs automatically when the incident
+is resolved, not as part of the skill-selection loop above (or paused for
+human approval first — see the HITL gate note under Notifications below).
 
 **Output: `IncidentPostmortem`**
 
@@ -616,6 +633,43 @@ Every notification is logged:
 - Status (sent / failed)
 - Error message (if failed)
 - Delivery timestamp
+
+### War Room (Microsoft Teams)
+
+One click on an incident creates a real Microsoft Teams meeting — not a
+mocked link, a genuine calendar event with a joinable Teams call attached,
+created via delegated OAuth (a connected service/bot Microsoft account, no
+tenant-admin PowerShell step required).
+
+**`POST /api/v1/incidents/:id/warroom`** — creates the meeting and:
+
+- **Invites the right people automatically.** The affected software's
+  `stakeholders` + `sre_team` (Software Catalog, see below) are resolved
+  into a deduplicated attendee list and added to the Teams invite — nobody
+  has to go find the join link inside the incident.
+- **Notifies configured channels.** `war_room_created` fires through the
+  same `notifications`/escalation-policy path as `incident_created` and
+  `rca_completed` — Slack/Teams/webhook/PagerDuty channels already
+  configured for it just work, no separate setup.
+- **Enables recording + transcription** on the meeting automatically
+  (`recordAutomatically`/`allowTranscription`), so a transcript is
+  available when the meeting ends without anyone remembering to start it.
+- **Tracks a real lifecycle**: `scheduled` → `active` → `ended` →
+  `summarized`. `active` is set the first time attendance data shows up
+  for a still-`scheduled` meeting (checked opportunistically on read, not
+  a dedicated poller) — a real signal instead of a status nobody ever set.
+
+**`POST /api/v1/warroom/:id/end`** — marks the meeting ended, fetches the
+transcript + attendance report from Graph, and publishes
+`warroom.meeting.ended`; a Redis-stream consumer then summarizes the
+transcript with an LLM (executive summary, key action items, participant
+list) and writes it back — async, so ending the meeting in the UI doesn't
+block on summarization.
+
+**`POST /api/v1/organizations/:id/integrations/teams/oauth/disconnect`** —
+clears the connected account (refresh token + connected email) without
+touching the saved Azure AD app registration (tenant/client/secret), so
+reconnecting doesn't require re-entering those.
 
 ---
 
