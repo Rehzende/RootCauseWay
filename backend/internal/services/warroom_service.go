@@ -214,7 +214,54 @@ func (s *WarRoomService) CreateWarRoom(ctx context.Context, incidentID uuid.UUID
 
 // GetByIncident returns the most recent war room meeting for an incident.
 func (s *WarRoomService) GetByIncident(ctx context.Context, incidentID uuid.UUID) (*models.WarRoomMeeting, error) {
-	return s.repo.GetLatestByIncident(ctx, incidentID)
+	meeting, err := s.repo.GetLatestByIncident(ctx, incidentID)
+	if err != nil {
+		return nil, err
+	}
+	if meeting != nil && meeting.Status == "scheduled" {
+		s.maybeMarkActive(ctx, meeting)
+	}
+	return meeting, nil
+}
+
+// maybeMarkActive checks, best-effort, whether anyone has actually joined a
+// still-"scheduled" meeting yet, flipping it to "active" the first time
+// they have -- a real, if approximate, signal instead of the always-false
+// decorative "active" WarRoomStatus that existed on the frontend with
+// nothing on the backend ever setting it.
+//
+// Deliberately cheap: piggybacks on GetByIncident, which the frontend's
+// useWarRoom hook already polls every 10s while a meeting isn't
+// "summarized" -- no dedicated background poller, and nowhere near the
+// Calls API integration a genuine live roster ("who's in the call right
+// now") would need (separate, much bigger project -- see backlog). One-way
+// only: never un-marks a meeting active again.
+//
+// Caveat, not yet confirmed against a real ongoing meeting: Microsoft's
+// attendanceReports endpoint (GraphTeamsClient.GetAttendanceReport) is
+// documented primarily as a post-meeting artifact; whether it returns
+// partial data while a meeting is still genuinely in progress varies and
+// hasn't been live-tested here. Worst case if it never does is exactly
+// today's behavior (status stays "scheduled" until EndWarRoom marks it
+// "ended") -- this is a pure incremental improvement, not a regression
+// risk, but verify it against a real live meeting before relying on it.
+func (s *WarRoomService) maybeMarkActive(ctx context.Context, meeting *models.WarRoomMeeting) {
+	client, err := s.resolveTeams(ctx, meeting.OrgID)
+	if err != nil {
+		return
+	}
+	attendees, err := client.GetAttendanceReport(ctx, meeting.ExternalMeetingID)
+	if err != nil || len(attendees) == 0 {
+		return
+	}
+
+	meeting.Status = "active"
+	meeting.UpdatedAt = time.Now()
+	if err := s.repo.Update(ctx, meeting); err != nil {
+		slog.Warn("failed to mark war room active", "meeting_id", meeting.ID, "error", err)
+		return
+	}
+	slog.Info("war room meeting marked active", "meeting_id", meeting.ID, "attendee_count", len(attendees))
 }
 
 // GetByID returns a war room meeting by its own ID. Used by the internal

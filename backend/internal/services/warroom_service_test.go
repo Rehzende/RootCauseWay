@@ -395,3 +395,90 @@ func TestWarRoomService_GetByIncident(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expected.ID, got.ID)
 }
+
+// fakeAttendanceClient lets tests control exactly what GetAttendanceReport
+// returns, independent of teams.MockTeamsClient's fixed 3-canned-attendees
+// behavior. Embeds teams.TeamsClient (nil) since these tests never call the
+// other two methods.
+type fakeAttendanceClient struct {
+	teams.TeamsClient
+	attendees []teams.Attendee
+	err       error
+}
+
+func (c *fakeAttendanceClient) GetAttendanceReport(ctx context.Context, externalID string) ([]teams.Attendee, error) {
+	return c.attendees, c.err
+}
+
+func TestWarRoomService_GetByIncident_MarksActiveWhenSomeoneHasJoined(t *testing.T) {
+	repo := new(MockWarRoomRepo)
+	incidents := new(MockIncidentReader)
+	teamsClient := teams.NewMockTeamsClient() // always returns 3 canned attendees
+	svc := NewWarRoomService(repo, fixedTeamsResolver(teamsClient), incidents)
+
+	incidentID := uuid.New()
+	meeting := &models.WarRoomMeeting{ID: uuid.New(), IncidentID: incidentID, OrgID: uuid.New(), ExternalMeetingID: "ext-1", Status: "scheduled"}
+	repo.On("GetLatestByIncident", mock.Anything, incidentID).Return(meeting, nil)
+	repo.On("Update", mock.Anything, mock.MatchedBy(func(m *models.WarRoomMeeting) bool {
+		return m.Status == "active"
+	})).Return(nil)
+
+	got, err := svc.GetByIncident(context.Background(), incidentID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "active", got.Status)
+	repo.AssertCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
+func TestWarRoomService_GetByIncident_StaysScheduledWhenNoOneHasJoinedYet(t *testing.T) {
+	repo := new(MockWarRoomRepo)
+	incidents := new(MockIncidentReader)
+	client := &fakeAttendanceClient{attendees: nil, err: nil}
+	svc := NewWarRoomService(repo, fixedTeamsResolver(client), incidents)
+
+	incidentID := uuid.New()
+	meeting := &models.WarRoomMeeting{ID: uuid.New(), IncidentID: incidentID, OrgID: uuid.New(), ExternalMeetingID: "ext-1", Status: "scheduled"}
+	repo.On("GetLatestByIncident", mock.Anything, incidentID).Return(meeting, nil)
+
+	got, err := svc.GetByIncident(context.Background(), incidentID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "scheduled", got.Status)
+	repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
+func TestWarRoomService_GetByIncident_StaysScheduledOnAttendanceReportError(t *testing.T) {
+	repo := new(MockWarRoomRepo)
+	incidents := new(MockIncidentReader)
+	client := &fakeAttendanceClient{err: errors.New("no attendance reports available yet")}
+	svc := NewWarRoomService(repo, fixedTeamsResolver(client), incidents)
+
+	incidentID := uuid.New()
+	meeting := &models.WarRoomMeeting{ID: uuid.New(), IncidentID: incidentID, OrgID: uuid.New(), ExternalMeetingID: "ext-1", Status: "scheduled"}
+	repo.On("GetLatestByIncident", mock.Anything, incidentID).Return(meeting, nil)
+
+	got, err := svc.GetByIncident(context.Background(), incidentID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "scheduled", got.Status)
+	repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
+func TestWarRoomService_GetByIncident_DoesNotRecheckNonScheduledMeetings(t *testing.T) {
+	repo := new(MockWarRoomRepo)
+	incidents := new(MockIncidentReader)
+	teamsClient := teams.NewMockTeamsClient()
+	svc := NewWarRoomService(repo, fixedTeamsResolver(teamsClient), incidents)
+
+	incidentID := uuid.New()
+	for _, status := range []string{"active", "ended", "summarized"} {
+		meeting := &models.WarRoomMeeting{ID: uuid.New(), IncidentID: incidentID, Status: status}
+		repo.On("GetLatestByIncident", mock.Anything, incidentID).Return(meeting, nil).Once()
+
+		got, err := svc.GetByIncident(context.Background(), incidentID)
+
+		require.NoError(t, err)
+		assert.Equal(t, status, got.Status, "status must not change once past 'scheduled'")
+	}
+	repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
