@@ -93,3 +93,7 @@ make dev-frontend  # React on :5173
 - API: `contracts/openapi/rootcauseway-api.yaml`
 - Redis events: `contracts/events/redis-events.yaml`
 - DB schema: `contracts/schemas/database.sql`
+
+## License
+
+[MIT](LICENSE)
