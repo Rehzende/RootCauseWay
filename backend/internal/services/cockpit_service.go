@@ -69,7 +69,16 @@ func (s *AgentRunService) Create(ctx context.Context, incidentID uuid.UUID, req 
 		InputData:   req.InputData,
 		OutputData:  json.RawMessage("{}"),
 		ModelUsed:   req.ModelUsed,
-		CreatedAt:   now,
+		// StartedAt used to only get set by Update() on a transition to
+		// "running" -- but the orchestrator's real dispatch loop never sends
+		// that transition, it goes straight from this "pending" create to a
+		// "completed"/"failed" Update. StartedAt stayed nil forever, so the
+		// frontend's RunsTimeline (new Date(run.started_at)) rendered
+		// "Invalid Date" for every single stage. A run's tracking row is
+		// created right as the orchestrator is about to dispatch it, so
+		// "created" and "started" are the same moment in practice here.
+		StartedAt: &now,
+		CreatedAt: now,
 	}
 	if run.InputData == nil {
 		run.InputData = json.RawMessage("{}")

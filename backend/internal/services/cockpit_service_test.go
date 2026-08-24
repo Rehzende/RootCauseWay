@@ -31,6 +31,58 @@ func (m *MockRCARepo) Update(ctx context.Context, rca *models.IncidentRCA) error
 	return m.Called(ctx, rca).Error(0)
 }
 
+type MockAgentRunRepo struct {
+	mock.Mock
+}
+
+func (m *MockAgentRunRepo) Create(ctx context.Context, a *models.AgentRun) error {
+	return m.Called(ctx, a).Error(0)
+}
+
+func (m *MockAgentRunRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.AgentRun, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.AgentRun), args.Error(1)
+}
+
+func (m *MockAgentRunRepo) ListByIncident(ctx context.Context, incidentID uuid.UUID) ([]models.AgentRun, error) {
+	args := m.Called(ctx, incidentID)
+	return args.Get(0).([]models.AgentRun), args.Error(1)
+}
+
+func (m *MockAgentRunRepo) Update(ctx context.Context, a *models.AgentRun) error {
+	return m.Called(ctx, a).Error(0)
+}
+
+func (m *MockAgentRunRepo) GetDAG(ctx context.Context, incidentID uuid.UUID) ([]models.AgentRun, error) {
+	args := m.Called(ctx, incidentID)
+	return args.Get(0).([]models.AgentRun), args.Error(1)
+}
+
+// TestAgentRunService_Create_SetsStartedAt guards a real bug found live:
+// StartedAt used to only get set by Update() on a transition to "running",
+// a status the orchestrator's real dispatch loop never sends (it goes
+// straight from this "pending" create to a "completed"/"failed" Update).
+// StartedAt stayed nil forever, so the frontend's RunsTimeline (new
+// Date(run.started_at)) rendered "Invalid Date" for every single stage --
+// confirmed live while capturing screenshots for the README.
+func TestAgentRunService_Create_SetsStartedAt(t *testing.T) {
+	repo := new(MockAgentRunRepo)
+	svc := NewAgentRunService(repo)
+	repo.On("Create", mock.Anything, mock.AnythingOfType("*models.AgentRun")).Return(nil)
+
+	run, err := svc.Create(context.Background(), uuid.New(), models.CreateAgentRunRequest{
+		AgentName: "triage",
+		AgentType: "triage",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, run.StartedAt)
+	assert.WithinDuration(t, run.CreatedAt, *run.StartedAt, 0)
+}
+
 // TestRCAService_Create_BackfillsIncidentRootCause guards against the gap
 // found while validating the automated alert->RCA pipeline under load: the
 // RCI/RCA sub-resources persisted correctly, but GET /incidents/{id} kept
