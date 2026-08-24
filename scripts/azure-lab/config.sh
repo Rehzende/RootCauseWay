@@ -12,15 +12,26 @@
 set -euo pipefail
 
 : "${ROOTCAUSEWAY_LAB_LOCATION:=brazilsouth}"
-: "${ROOTCAUSEWAY_LAB_RG:=rootcauseway-azure-lab}"
-: "${ROOTCAUSEWAY_LAB_VNET:=rootcauseway-lab-vnet}"
-: "${ROOTCAUSEWAY_LAB_SUBNET:=rootcauseway-lab-aks-subnet}"
-: "${ROOTCAUSEWAY_LAB_NSG:=rootcauseway-lab-nsg}"
-: "${ROOTCAUSEWAY_LAB_AKS:=rootcauseway-lab-aks}"
+# NOTE (2026-08-24): the resource-name defaults below are pinned to the
+# actual Azure resources already deployed under the "rcai" prefix, from
+# before the RootCauseway rebrand -- Azure resource names are immutable
+# (renaming means recreating), so these stay "rcai-*" on purpose while
+# every variable NAME in this file uses the ROOTCAUSEWAY_LAB_ prefix for
+# consistency with the rest of the rebranded codebase. A blind rename pass
+# once flipped these VALUES to "rootcauseway-*" too, which pointed every
+# script here at resources that don't exist -- confirmed via `az resource
+# list -g rcai-azure-lab`, every real name still says "rcai". Don't
+# "fix" these back to rootcauseway-* without actually recreating the
+# underlying Azure resources first.
+: "${ROOTCAUSEWAY_LAB_RG:=rcai-azure-lab}"
+: "${ROOTCAUSEWAY_LAB_VNET:=rcai-lab-vnet}"
+: "${ROOTCAUSEWAY_LAB_SUBNET:=rcai-lab-aks-subnet}"
+: "${ROOTCAUSEWAY_LAB_NSG:=rcai-lab-nsg}"
+: "${ROOTCAUSEWAY_LAB_AKS:=rcai-lab-aks}"
 : "${ROOTCAUSEWAY_LAB_AKS_NODE_COUNT:=1}"
 : "${ROOTCAUSEWAY_LAB_AKS_NODE_SIZE:=Standard_D2s_v6}"
-: "${ROOTCAUSEWAY_LAB_SP_NAME:=rootcauseway-lab-aks-jit-sp}"
-: "${ROOTCAUSEWAY_LAB_CHAOS_WORKSPACE:=rootcauseway-lab-chaos}"
+: "${ROOTCAUSEWAY_LAB_SP_NAME:=rcai-lab-aks-jit-sp}"
+: "${ROOTCAUSEWAY_LAB_CHAOS_WORKSPACE:=rcai-lab-chaos}"
 # Chaos Studio Workspaces is only available in a short list of regions
 # (eastus2, westus2, northeurope, swedencentral, uksouth, japaneast,
 # westcentralus, switzerlandnorth as of this writing -- brazilsouth is
@@ -38,12 +49,12 @@ set -euo pipefail
 _sub_id="$(az account show --query id -o tsv)"
 _suffix="$(echo -n "$_sub_id" | shasum -a 256 | cut -c1-8)"
 
-: "${ROOTCAUSEWAY_LAB_STORAGE:=rootcausewaylab${_suffix}}"
-: "${ROOTCAUSEWAY_LAB_KEYVAULT:=rootcauseway-lab-kv-${_suffix}}"
-: "${ROOTCAUSEWAY_LAB_PG:=rootcauseway-lab-pg-${_suffix}}"
-: "${ROOTCAUSEWAY_LAB_PG_ADMIN_USER:=rootcausewayadmin}"
+: "${ROOTCAUSEWAY_LAB_STORAGE:=rcailab${_suffix}}"
+: "${ROOTCAUSEWAY_LAB_KEYVAULT:=rcai-lab-kv-${_suffix}}"
+: "${ROOTCAUSEWAY_LAB_PG:=rcai-lab-pg-${_suffix}}"
+: "${ROOTCAUSEWAY_LAB_PG_ADMIN_USER:=rcaiadmin}"
 : "${ROOTCAUSEWAY_LAB_PG_SKU:=Standard_B1ms}"
-: "${ROOTCAUSEWAY_LAB_ACR:=rootcausewaylabacr${_suffix}}"
+: "${ROOTCAUSEWAY_LAB_ACR:=rcailabacr${_suffix}}"
 # Homelab node used to build/push images into the ACR -- `az acr build`
 # (cloud-side build) hits TasksOperationsNotAllowed on new/low-usage
 # subscriptions, so this script builds locally on the node and `docker

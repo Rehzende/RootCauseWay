@@ -27,7 +27,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 source ./config.sh
 
-: "${ROOTCAUSEWAY_LAB_AZURE_AGENT_SP_NAME:=rootcauseway-azure-agent-sp}"
+: "${ROOTCAUSEWAY_LAB_AZURE_AGENT_SP_NAME:=rcai-azure-agent-sp}"
 export ROOTCAUSEWAY_LAB_AZURE_AGENT_SP_NAME
 
 echo "== Service principal for azure-agent: $ROOTCAUSEWAY_LAB_AZURE_AGENT_SP_NAME =="
