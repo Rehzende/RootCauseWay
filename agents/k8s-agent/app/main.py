@@ -55,16 +55,19 @@ card = AgentCard(
             id="k8s-debug",
             name="K8s Debug",
             description="Debug Kubernetes issues by collecting pod status, logs, and events",
+            required_resource_types=["kubernetes_cluster"],
         ),
         AgentSkill(
             id="k8s-logs",
             name="K8s Log Analysis",
             description="Analyze Kubernetes pod logs for error patterns",
+            required_resource_types=["kubernetes_cluster"],
         ),
         AgentSkill(
             id="k8s-diagnostics",
             name="K8s Diagnostics",
             description="Run comprehensive Kubernetes cluster diagnostics",
+            required_resource_types=["kubernetes_cluster"],
         ),
         AgentSkill(
             id="incident-analysis",
@@ -75,6 +78,7 @@ card = AgentCard(
                 "a structured root-cause analysis. Pass {namespace, service, otel_service?} "
                 "in the task message to trigger it."
             ),
+            required_resource_types=["kubernetes_cluster"],
         ),
     ],
 )

@@ -183,7 +183,18 @@ export type IncidentEventType =
   | 'hypothesis_generated'
   | 'status_changed'
   | 'comment'
-  | 'agent_action';
+  | 'agent_action'
+  | 'rci_started'
+  | 'rci_completed'
+  | 'rca_started'
+  | 'rca_completed'
+  | 'postmortem_started'
+  | 'postmortem_completed'
+  | 'agent_run_started'
+  | 'agent_run_completed'
+  | 'agent_run_failed'
+  | 'correlated_alert'
+  | 'war_room_created';
 
 export type EvidenceType = 'log' | 'metric' | 'trace' | 'snapshot' | 'agent_output' | 'manual';
 

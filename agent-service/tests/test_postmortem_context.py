@@ -107,13 +107,32 @@ async def test_dispatch_postmortem_sends_a_datapart_not_textpart(orchestrator, b
     )
     context = {"alert": {"title": "x"}, "rci": None, "rca": None, "software_context": {}, "evidence": []}
 
-    await orchestrator._dispatch_postmortem(incident_id, context)
+    await orchestrator._dispatch_postmortem(incident_id, context, uuid.uuid4())
 
     sent_message = a2a.send_task.await_args.args[2]
     assert len(sent_message.parts) == 1
     part = sent_message.parts[0]
     assert part.type == "data"
     assert part.data == context
+
+
+@pytest.mark.asyncio
+async def test_dispatch_postmortem_emits_started_and_completed_timeline_events(orchestrator, backend, a2a):
+    incident_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+    a2a.send_task.return_value = Task(
+        id="t1", status=TaskStatus.COMPLETED,
+        artifacts=[Artifact(name="postmortem", parts=[DataPart(data={"title": "Postmortem: x"})])],
+    )
+    context = {"alert": {"title": "x"}, "rci": None, "rca": None, "software_context": {}, "evidence": []}
+
+    await orchestrator._dispatch_postmortem(incident_id, context, org_id)
+
+    event_types = [c.args[1].type for c in backend.add_incident_event.await_args_list]
+    assert event_types == ["postmortem_started", "postmortem_completed"]
+    for call in backend.add_incident_event.await_args_list:
+        assert call.args[0] == incident_id
+        assert call.args[2] == org_id
 
 
 @pytest.mark.asyncio

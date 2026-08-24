@@ -55,6 +55,38 @@ class TestAgentCard:
         with pytest.raises(Exception):
             AgentCard()  # missing required fields
 
+    def test_skill_required_resource_types_defaults_empty(self):
+        skill = AgentSkill(id="triage", name="Triage", description="Alert triage")
+        assert skill.required_resource_types == []
+
+    def test_skill_required_resource_types_survives_serialize_then_reparse(self):
+        # Regression test: this is exactly the round trip the orchestrator does --
+        # an agent (e.g. k8s-agent) declares required_resource_types on its own
+        # AgentSkill, serves it via .well-known/agent.json (card.model_dump), and
+        # the orchestrator's A2AClient.discover() re-parses that JSON with this
+        # same AgentCard model (AgentCard.model_validate). Before this field
+        # existed on AgentSkill, Pydantic silently dropped it on either hop --
+        # the LLM prompt would show "requires: none" for a skill that actually
+        # needs a JIT-leased kubernetes_cluster credential.
+        card = AgentCard(
+            name="k8s-agent",
+            url="http://k8s-agent:8094",
+            version="0.1.0",
+            skills=[
+                AgentSkill(
+                    id="k8s-debug",
+                    name="K8s Debug",
+                    description="Debug Kubernetes issues",
+                    required_resource_types=["kubernetes_cluster"],
+                ),
+            ],
+        )
+        dumped = card.model_dump(by_alias=True)
+        assert dumped["skills"][0]["required_resource_types"] == ["kubernetes_cluster"]
+
+        reparsed = AgentCard.model_validate(dumped)
+        assert reparsed.skills[0].required_resource_types == ["kubernetes_cluster"]
+
 
 class TestTask:
     def test_default_status(self):

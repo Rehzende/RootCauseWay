@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: rootcauseway-k8s-debug-agent
+Version: 0.1.0
+Requires-Python: >=3.12
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn>=0.32.0
+Requires-Dist: pydantic>=2.10.0
+Requires-Dist: httpx>=0.28.0
+Requires-Dist: mlflow-skinny>=2.19.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: prometheus-fastapi-instrumentator>=7.0.0
+Requires-Dist: opentelemetry-sdk>=1.27.0
+Requires-Dist: opentelemetry-exporter-otlp-proto-http>=1.27.0
+Requires-Dist: opentelemetry-instrumentation-fastapi>=0.48b0
+Requires-Dist: opentelemetry-instrumentation-httpx>=0.48b0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24.0; extra == "dev"

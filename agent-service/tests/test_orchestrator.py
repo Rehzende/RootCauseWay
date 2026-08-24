@@ -274,6 +274,158 @@ class TestOrchestrator:
         mock_backend.create_rca.assert_awaited_once()
         mock_backend.create_rci.assert_awaited_once()
 
+    async def test_timeline_events_emitted_for_successful_dispatch(
+        self, mock_backend, mock_a2a_client, mock_llm_call
+    ):
+        """Regression test for the "Recent Timeline: No events yet" gap:
+        before this, only correlated_alert and war_room_created ever wrote
+        an incident_events row -- triage/evidence/rca/postmortem progress
+        was invisible on the incident's timeline no matter how much of the
+        pipeline actually ran."""
+        orchestrator = Orchestrator(
+            backend_client=mock_backend,
+            a2a_client=mock_a2a_client,
+            llm_call=mock_llm_call,
+        )
+
+        await orchestrator.handle_incident(
+            incident_id=uuid.uuid4(),
+            alert={"title": "test", "severity": "high"},
+            software_id="sw-1",
+            org_id=uuid.uuid4(),
+        )
+
+        event_types = [c.args[1].type for c in mock_backend.add_incident_event.await_args_list]
+        # mock_llm_call's fixture dispatches triage + evidence-collection
+        # (rca gets force-added for non-low severity, see
+        # test_handle_incident_dispatches_tasks above).
+        assert "agent_run_started" in event_types
+        assert "agent_run_completed" in event_types
+        assert "triage_started" in event_types
+        assert "triage_completed" in event_types
+        assert "evidence_collected" in event_types
+        assert "rca_started" in event_types
+
+    async def test_timeline_event_agent_run_failed_on_dispatch_exception(
+        self, mock_backend, mock_a2a_client, mock_llm_call
+    ):
+        mock_a2a_client.send_task = AsyncMock(side_effect=Exception("agent down"))
+
+        orchestrator = Orchestrator(
+            backend_client=mock_backend,
+            a2a_client=mock_a2a_client,
+            llm_call=mock_llm_call,
+        )
+
+        await orchestrator.handle_incident(
+            incident_id=uuid.uuid4(),
+            alert={"title": "test", "severity": "low"},
+            software_id="sw-1",
+            org_id=uuid.uuid4(),
+        )
+
+        event_types = [c.args[1].type for c in mock_backend.add_incident_event.await_args_list]
+        assert "agent_run_started" in event_types
+        assert "agent_run_failed" in event_types
+        assert "agent_run_completed" not in event_types
+
+    async def test_timeline_events_for_rci_rca_and_hypothesis_on_persist(
+        self, mock_backend, mock_a2a_client
+    ):
+        """rci_completed/rca_completed/hypothesis_generated must fire from
+        _persist_results (i.e. only once the artifact is actually confirmed
+        written), not just because the rca-agent's A2A call returned."""
+        async def llm_call(prompt: str) -> tuple[str, dict]:
+            return json.dumps({
+                "severity_assessment": "high",
+                "reasoning": "test",
+                "agent_calls": [
+                    {
+                        "agent_id": "rca-1",
+                        "agent_url": "http://rca-agent:8092",
+                        "skill_id": "rca",
+                        "priority": 1,
+                        "input_summary": "Investigate root cause",
+                    },
+                ],
+            }), _MOCK_USAGE
+
+        mock_a2a_client.send_task = AsyncMock(return_value=Task(
+            id="task-1",
+            status=TaskStatus.COMPLETED,
+            artifacts=[
+                Artifact(name="hypothesis", parts=[DataPart(data={"summary": "..."})]),
+                Artifact(name="rci", parts=[DataPart(data={"investigation_summary": "..."})]),
+                Artifact(name="rca", parts=[DataPart(data={"root_cause_summary": "pool exhaustion"})]),
+            ],
+        ))
+
+        orchestrator = Orchestrator(
+            backend_client=mock_backend,
+            a2a_client=mock_a2a_client,
+            llm_call=llm_call,
+        )
+
+        await orchestrator.handle_incident(
+            incident_id=uuid.uuid4(),
+            alert={"title": "test", "severity": "high"},
+            software_id="sw-1",
+            org_id=uuid.uuid4(),
+        )
+
+        event_types = [c.args[1].type for c in mock_backend.add_incident_event.await_args_list]
+        assert "rca_started" in event_types
+        assert "hypothesis_generated" in event_types
+        assert "rci_completed" in event_types
+        assert "rca_completed" in event_types
+
+    async def test_timeline_events_skip_persist_completion_when_backend_write_fails(
+        self, mock_backend, mock_a2a_client
+    ):
+        """If create_rca itself fails, rca_completed must NOT be emitted --
+        the A2A call succeeding is not the same as the artifact actually
+        being persisted."""
+        mock_backend.create_rca = AsyncMock(side_effect=Exception("db down"))
+
+        async def llm_call(prompt: str) -> tuple[str, dict]:
+            return json.dumps({
+                "severity_assessment": "high",
+                "reasoning": "test",
+                "agent_calls": [
+                    {
+                        "agent_id": "rca-1",
+                        "agent_url": "http://rca-agent:8092",
+                        "skill_id": "rca",
+                        "priority": 1,
+                        "input_summary": "Investigate root cause",
+                    },
+                ],
+            }), _MOCK_USAGE
+
+        mock_a2a_client.send_task = AsyncMock(return_value=Task(
+            id="task-1",
+            status=TaskStatus.COMPLETED,
+            artifacts=[
+                Artifact(name="rca", parts=[DataPart(data={"root_cause_summary": "pool exhaustion"})]),
+            ],
+        ))
+
+        orchestrator = Orchestrator(
+            backend_client=mock_backend,
+            a2a_client=mock_a2a_client,
+            llm_call=llm_call,
+        )
+
+        await orchestrator.handle_incident(
+            incident_id=uuid.uuid4(),
+            alert={"title": "test", "severity": "high"},
+            software_id="sw-1",
+            org_id=uuid.uuid4(),
+        )
+
+        event_types = [c.args[1].type for c in mock_backend.add_incident_event.await_args_list]
+        assert "rca_completed" not in event_types
+
     async def test_default_decision_on_llm_failure(self, mock_backend, mock_a2a_client):
         async def failing_llm(prompt: str) -> str:
             raise RuntimeError("LLM down")
@@ -723,6 +875,30 @@ class TestResumeListener:
         })
 
         orchestrator.run_postmortem_only.assert_not_called()
+
+
+class TestSemanticEventsForSkill:
+    def test_triage(self):
+        assert Orchestrator._semantic_events_for_skill("triage") == ("triage_started", ["triage_completed"])
+
+    def test_evidence_collection_has_no_started_type(self):
+        assert Orchestrator._semantic_events_for_skill("evidence-collection") == (None, ["evidence_collected"])
+
+    def test_rca_completion_handled_by_persist_results_not_here(self):
+        # rca_completed/hypothesis_generated/rci_completed are emitted from
+        # _persist_results once the artifacts are confirmed persisted, so
+        # this mapping only carries the "started" half for rca.
+        assert Orchestrator._semantic_events_for_skill("rca") == ("rca_started", [])
+
+    def test_postmortem_completion_handled_by_persist_results_not_here(self):
+        assert Orchestrator._semantic_events_for_skill("postmortem") == ("postmortem_started", [])
+
+    def test_unknown_skill_has_no_semantic_type(self):
+        assert Orchestrator._semantic_events_for_skill("k8s-debug") == (None, [])
+        assert Orchestrator._semantic_events_for_skill("azure-aks-activity-log") == (None, [])
+
+    def test_case_insensitive(self):
+        assert Orchestrator._semantic_events_for_skill("RCA") == ("rca_started", [])
 
 
 class TestFieldSanitizers:

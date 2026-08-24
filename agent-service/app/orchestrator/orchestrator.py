@@ -32,7 +32,7 @@ from app.a2a.models import (
 from app.credentials.jit_provider import JITCredentialProvider
 from app.loop.inner_loop import InnerLoop
 from app.loop.outer_loop import OuterLoop
-from app.models.api import CreateAgentRunRequest, UpdateAgentRunRequest
+from app.models.api import CreateAgentRunRequest, IncidentEventCreate, UpdateAgentRunRequest
 from app.observability.metrics import record_swallowed_error
 from app.orchestrator.context_builder import ContextBuilder
 from app.services.backend_client import BackendClient
@@ -77,9 +77,12 @@ specialized skills to invoke and in what order.
 
 ## Instructions
 Analyze the alert and context. Decide which skills to invoke, in what order. \
-Each skill is linked to one or more agents that can execute it. Some skills require \
-access to specific resource types (e.g., kubernetes_cluster, database). For each \
-skill you select, JIT credentials will be provisioned automatically.
+Each skill is linked to one or more agents that can execute it. Each entry under \
+"Formatted" below states what that skill "requires" (e.g. "requires: kubernetes_cluster \
+access", or "requires: none") -- copy that skill's declared resource type(s) verbatim \
+into "required_resource_types" for any skill you select; don't guess or invent one from \
+the description. JIT credentials for those resource types are provisioned automatically \
+before the skill is called.
 
 Output ONLY valid JSON with this schema:
 
@@ -346,6 +349,17 @@ class Orchestrator:
 
             task_id = str(uuid.uuid4())
 
+            # Timeline: mark this skill's dispatch as starting. agent_run_started
+            # is generic and always fires; the semantic type (triage_started,
+            # rca_started, ...) only exists for skills the timeline UI has a
+            # dedicated icon for -- see _semantic_events_for_skill.
+            _sem_started, _sem_completed = self._semantic_events_for_skill(skill_id)
+            await self._emit_incident_event(
+                incident_id, org_id, "agent_run_started", {"skill_id": skill_id, "agent_id": agent_id},
+            )
+            if _sem_started:
+                await self._emit_incident_event(incident_id, org_id, _sem_started, {"skill_id": skill_id})
+
             # 5a. Request JIT credentials for required resources
             credentials: dict[str, Any] = {}
             for resource_type in required_resource_types:
@@ -531,6 +545,18 @@ class Orchestrator:
                         logger.warning("Failed to update agent_run %s", run_id)
                     stage_timings[skill_id] = {"duration_ms": duration_ms, "status": "completed"}
 
+                # Timeline: this skill's dispatch succeeded. rca_completed/
+                # postmortem_completed/hypothesis_generated are NOT emitted
+                # here -- those fire from _persist_results once the
+                # artifacts are actually confirmed persisted, since a
+                # successful A2A call doesn't guarantee the backend write
+                # that follows it also succeeds.
+                await self._emit_incident_event(
+                    incident_id, org_id, "agent_run_completed", {"skill_id": skill_id},
+                )
+                for _ct in _sem_completed:
+                    await self._emit_incident_event(incident_id, org_id, _ct, {"skill_id": skill_id})
+
             except Exception:
                 record_swallowed_error("orchestrator", "agent_dispatch_failed")
                 logger.exception(
@@ -541,6 +567,9 @@ class Orchestrator:
                 results[skill_id] = {"error": "agent_unavailable"}
                 _fail_duration_ms = int((_time.monotonic() - start_mono) * 1000)
                 stage_timings[skill_id] = {"duration_ms": _fail_duration_ms, "status": "failed"}
+                await self._emit_incident_event(
+                    incident_id, org_id, "agent_run_failed", {"skill_id": skill_id, "error": "agent_unavailable"},
+                )
                 # Mark agent_run as failed
                 if run_id:
                     try:
@@ -573,7 +602,7 @@ class Orchestrator:
         self._record_inner_loop_stats(incident_id)
 
         # 7. Persist final results
-        await self._persist_results(incident_id, results)
+        await self._persist_results(incident_id, results, org_id)
         await self._persist_mlflow_trace_link(incident_id, org_id)
 
         # 8. Outer loop: extract and store knowledge for future incidents
@@ -975,8 +1004,54 @@ class Orchestrator:
             record_swallowed_error("orchestrator", "mlflow_trace_link_persist_failed")
             logger.exception("Failed to persist MLflow trace link for incident %s", incident_id)
 
+    async def _emit_incident_event(
+        self,
+        incident_id: uuid.UUID,
+        org_id: uuid.UUID,
+        event_type: str,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """Best-effort incident_events timeline write. Never raises -- a
+        timeline entry is a nice-to-have observability signal, not something
+        that should ever abort or degrade the actual investigation. Mirrors
+        the existing best-effort pattern used for `correlated_alert` and
+        `war_room_created` elsewhere in this codebase.
+        """
+        try:
+            await self._backend.add_incident_event(
+                incident_id, IncidentEventCreate(type=event_type, data=data), org_id,
+            )
+        except Exception:
+            record_swallowed_error("orchestrator", "incident_event_write_failed")
+            logger.warning("Failed to write incident event %r for %s", event_type, incident_id)
+
+    @staticmethod
+    def _semantic_events_for_skill(skill_id: str) -> tuple[str | None, list[str]]:
+        """Map a skill_id to the semantic incident_events types (beyond the
+        generic agent_run_started/completed always emitted) it should also
+        produce -- e.g. "triage" also gets a triage_started/triage_completed
+        pair the timeline UI has a dedicated icon/color for. Skills with no
+        dedicated semantic type (k8s-debug, azure-*, incident-analysis, a
+        user-created custom skill, ...) get (None, []) and rely on the
+        generic agent_run_* events alone.
+        """
+        s = skill_id.lower()
+        if s == "triage":
+            return "triage_started", ["triage_completed"]
+        if "evidence" in s:
+            return None, ["evidence_collected"]
+        if s == "rca":
+            return "rca_started", []  # rca_completed/hypothesis_generated/rci_completed
+            # are emitted by _persist_results once the artifacts are
+            # actually confirmed persisted, not just because the A2A call
+            # returned -- see _persist_results below.
+        if "postmortem" in s:
+            return "postmortem_started", []  # postmortem_completed likewise
+            # emitted by _persist_results on confirmed persist.
+        return None, []
+
     async def _persist_results(
-        self, incident_id: uuid.UUID, results: dict[str, Any]
+        self, incident_id: uuid.UUID, results: dict[str, Any], org_id: uuid.UUID
     ) -> None:
         """Store RCI, RCA, and postmortem results via the backend."""
         logger.info("Persisting results for incident %s, keys: %s", incident_id, list(results.keys()))
@@ -987,12 +1062,16 @@ class Orchestrator:
         # RCA agent returns artifacts named "rci", "rca", "hypothesis"
         rca_result = results.get("rca", {})
         if isinstance(rca_result, dict) and "error" not in rca_result:
+            if rca_result.get("hypothesis"):
+                await self._emit_incident_event(incident_id, org_id, "hypothesis_generated")
+
             rci_data = rca_result.get("rci", {})
             if rci_data and isinstance(rci_data, dict):
                 rci_data = self._sanitize_rci(rci_data)
                 try:
                     await self._backend.create_rci(incident_id, rci_data)
                     logger.info("Persisted RCI for incident %s", incident_id)
+                    await self._emit_incident_event(incident_id, org_id, "rci_completed")
                 except Exception:
                     record_swallowed_error("orchestrator", "rci_persist_failed")
                     logger.exception("Failed to persist RCI for incident %s", incident_id)
@@ -1003,6 +1082,7 @@ class Orchestrator:
                 try:
                     await self._backend.create_rca(incident_id, rca_data)
                     logger.info("Persisted RCA for incident %s", incident_id)
+                    await self._emit_incident_event(incident_id, org_id, "rca_completed")
                 except Exception:
                     record_swallowed_error("orchestrator", "rca_persist_failed")
                     logger.exception("Failed to persist RCA for incident %s", incident_id)
@@ -1015,6 +1095,7 @@ class Orchestrator:
                 try:
                     await self._backend.create_postmortem(incident_id, pm_data)
                     logger.info("Persisted postmortem for incident %s", incident_id)
+                    await self._emit_incident_event(incident_id, org_id, "postmortem_completed")
                 except Exception:
                     record_swallowed_error("orchestrator", "postmortem_persist_failed")
                     logger.exception("Failed to persist postmortem for incident %s", incident_id)
@@ -1234,7 +1315,7 @@ class Orchestrator:
         }
 
     async def _dispatch_postmortem(
-        self, incident_id: uuid.UUID, context: dict[str, Any],
+        self, incident_id: uuid.UUID, context: dict[str, Any], org_id: uuid.UUID,
     ) -> dict[str, Any]:
         """Low-level: dispatch the postmortem A2A agent and persist its
         result. No gate check here -- callers (`run_postmortem_stage`,
@@ -1250,6 +1331,8 @@ class Orchestrator:
         settings = get_settings()
         postmortem_url = settings.a2a_postmortem_agent_url
 
+        await self._emit_incident_event(incident_id, org_id, "postmortem_started")
+
         message = Message(
             role=Role.USER,
             parts=[DataPart(data=context)],
@@ -1258,7 +1341,10 @@ class Orchestrator:
         result_task = await self._a2a.send_task(postmortem_url, task_id, message)
         result = self._extract_result(result_task)
 
-        await self._persist_results(incident_id, {"postmortem": result})
+        # postmortem_completed is emitted by _persist_results itself, once
+        # the postmortem is actually confirmed persisted -- not here, where
+        # we only know the A2A call returned.
+        await self._persist_results(incident_id, {"postmortem": result}, org_id)
         return result
 
     # This is the entry point the incident.resolved/closed trigger uses
@@ -1289,7 +1375,7 @@ class Orchestrator:
 
         if context is None:
             context = await self._build_postmortem_context(incident_id, org_id)
-        result = await self._dispatch_postmortem(incident_id, context)
+        result = await self._dispatch_postmortem(incident_id, context, org_id)
         return {"postmortem": result, "status": "completed"}
 
     @mlflow.trace(span_type=SpanType.CHAIN, name="orchestrator.run_postmortem_only")
@@ -1310,7 +1396,7 @@ class Orchestrator:
         """
         if context is None:
             context = await self._build_postmortem_context(incident_id, org_id)
-        result = await self._dispatch_postmortem(incident_id, context)
+        result = await self._dispatch_postmortem(incident_id, context, org_id)
         logger.info("Resumed and completed postmortem stage for incident %s", incident_id)
         return {"postmortem": result, "status": "completed"}
 

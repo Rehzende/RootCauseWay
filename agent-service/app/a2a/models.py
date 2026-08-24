@@ -19,6 +19,11 @@ class AgentSkill(BaseModel):
     input_modes: list[str] = Field(default_factory=lambda: ["application/json"], alias="inputModes")
     output_modes: list[str] = Field(default_factory=lambda: ["application/json"], alias="outputModes")
     examples: list[str] = Field(default_factory=list)
+    # Declares which JIT-lease resource types (e.g. "kubernetes_cluster",
+    # "database") this skill needs. The orchestrator reads this straight
+    # off the discovered AgentCard and shows it to the skill-selection LLM
+    # so it never has to guess a resource type from free-text description.
+    required_resource_types: list[str] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 

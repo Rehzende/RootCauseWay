@@ -1,4 +1,4 @@
-import { AlertTriangle, Search, CheckCircle, FileText, Lightbulb, ArrowRightLeft, MessageSquare, Bot } from 'lucide-react';
+import { AlertTriangle, Search, CheckCircle, FileText, Lightbulb, ArrowRightLeft, MessageSquare, Bot, XCircle, Link2, Video } from 'lucide-react';
 import type { IncidentEvent, IncidentEventType } from '@/types/api';
 
 const iconMap: Record<IncidentEventType, typeof AlertTriangle> = {
@@ -10,6 +10,17 @@ const iconMap: Record<IncidentEventType, typeof AlertTriangle> = {
   status_changed: ArrowRightLeft,
   comment: MessageSquare,
   agent_action: Bot,
+  rci_started: Search,
+  rci_completed: CheckCircle,
+  rca_started: Search,
+  rca_completed: CheckCircle,
+  postmortem_started: FileText,
+  postmortem_completed: CheckCircle,
+  agent_run_started: Bot,
+  agent_run_completed: CheckCircle,
+  agent_run_failed: XCircle,
+  correlated_alert: Link2,
+  war_room_created: Video,
 };
 
 const colorMap: Record<IncidentEventType, string> = {
@@ -21,6 +32,17 @@ const colorMap: Record<IncidentEventType, string> = {
   status_changed: 'text-purple-500 bg-purple-50',
   comment: 'text-gray-500 bg-gray-50',
   agent_action: 'text-cyan-500 bg-cyan-50',
+  rci_started: 'text-blue-500 bg-blue-50',
+  rci_completed: 'text-green-500 bg-green-50',
+  rca_started: 'text-blue-500 bg-blue-50',
+  rca_completed: 'text-green-500 bg-green-50',
+  postmortem_started: 'text-blue-500 bg-blue-50',
+  postmortem_completed: 'text-green-500 bg-green-50',
+  agent_run_started: 'text-sky-500 bg-sky-50',
+  agent_run_completed: 'text-emerald-500 bg-emerald-50',
+  agent_run_failed: 'text-red-600 bg-red-50',
+  correlated_alert: 'text-orange-500 bg-orange-50',
+  war_room_created: 'text-pink-500 bg-pink-50',
 };
 
 function formatTime(iso: string): string {

@@ -1,0 +1,16 @@
+pyproject.toml
+app/__init__.py
+app/agent.py
+app/azure_clients.py
+app/main.py
+app/observability_metrics.py
+app/telemetry.py
+app/a2a/__init__.py
+app/a2a/models.py
+app/a2a/server.py
+rootcauseway_azure_agent.egg-info/PKG-INFO
+rootcauseway_azure_agent.egg-info/SOURCES.txt
+rootcauseway_azure_agent.egg-info/dependency_links.txt
+rootcauseway_azure_agent.egg-info/requires.txt
+rootcauseway_azure_agent.egg-info/top_level.txt
+tests/test_agent.py
