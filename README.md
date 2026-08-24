@@ -2,6 +2,15 @@
 
 Plataforma que transforma alertas operacionais em investigação estruturada de incidentes.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.jpg) | ![Incident overview](docs/screenshots/incident-overview.jpg) |
+| Dashboard — visão geral do cenário de incidentes | Incidente — contexto do software afetado, progresso da análise |
+| ![RCA com 5 Whys](docs/screenshots/rca-analysis.jpg) | ![Integração Teams](docs/screenshots/teams-integration.jpg) |
+| Root Cause Analysis — causa raiz, fatores contribuintes, 5 Whys | Settings > Integrations — conexão Teams para War Room |
+
 ## Quick Start
 
 ```bash
