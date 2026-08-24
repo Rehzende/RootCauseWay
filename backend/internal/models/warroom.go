@@ -73,3 +73,16 @@ type WarRoomMeetingEndedPayload struct {
 	IncidentID        uuid.UUID `json:"incident_id"`
 	ExternalMeetingID string    `json:"external_meeting_id"`
 }
+
+// WarRoomMeetingCreatedPayload is published on the warroom.meeting.created
+// event right after a war room meeting is created, so agent-service's
+// WarRoomConsumer can notify configured channels (Slack/Teams/webhook/
+// PagerDuty) with the join link -- see the project backlog gap this closes:
+// before it, the join_url only ever became a timeline event, never a
+// notification, so nobody was actively told a war room had started.
+type WarRoomMeetingCreatedPayload struct {
+	MeetingID  uuid.UUID `json:"meeting_id"`
+	IncidentID uuid.UUID `json:"incident_id"`
+	JoinURL    string    `json:"join_url"`
+	Severity   string    `json:"severity"`
+}

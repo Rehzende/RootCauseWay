@@ -76,10 +76,46 @@ def mock_summarizer():
 
 
 @pytest.fixture
-def consumer(mock_redis, mock_backend, mock_summarizer):
+def mock_notifier():
+    return AsyncMock()
+
+
+@pytest.fixture
+def consumer(mock_redis, mock_backend, mock_summarizer, mock_notifier):
     return WarRoomConsumer(
-        mock_redis, mock_backend, summarizer=mock_summarizer, consumer_name="test-warroom-consumer",
+        mock_redis, mock_backend, summarizer=mock_summarizer, notifier=mock_notifier,
+        consumer_name="test-warroom-consumer",
     )
+
+
+@pytest.fixture
+def created_stream_fields(meeting_id, incident_id, org_id):
+    envelope = {
+        "event_id": str(uuid.uuid4()),
+        "event_type": "warroom.meeting.created",
+        "org_id": org_id,
+        "timestamp": "2026-08-24T10:00:00Z",
+        "payload": {
+            "meeting_id": meeting_id,
+            "incident_id": incident_id,
+            "join_url": "https://teams.microsoft.com/l/meetup-join/abc",
+            "severity": "high",
+        },
+    }
+    return {
+        b"org_id": org_id.encode(),
+        b"event_type": b"warroom.meeting.created",
+        b"payload": json.dumps(envelope).encode(),
+        b"published_at": b"2026-08-24T10:00:00Z",
+    }
+
+
+class TestStop:
+    async def test_closes_summarizer_and_notifier(self, consumer, mock_summarizer, mock_notifier):
+        await consumer.stop()
+
+        mock_summarizer.close.assert_awaited_once()
+        mock_notifier.close.assert_awaited_once()
 
 
 class TestEnsureGroup:
@@ -144,6 +180,58 @@ class TestProcessEntry:
 
         assert ok is True  # acked regardless, to avoid infinite pending growth
         mock_redis.xack.assert_awaited_once_with("rootcauseway:events", "warroom-service", b"1-0")
+
+    async def test_created_event_notifies_channels(
+        self, consumer, mock_redis, mock_notifier, created_stream_fields,
+        incident_id, org_id,
+    ):
+        ok = await consumer._process_entry(b"1-0", created_stream_fields)
+
+        assert ok is True
+        mock_notifier.notify.assert_awaited_once()
+        call_args = mock_notifier.notify.await_args
+        assert str(call_args.args[1]) == org_id
+        assert str(call_args.args[2]) == incident_id
+        assert call_args.args[3] == "war_room_created"
+        assert call_args.args[4] == {
+            "incident_id": incident_id,
+            "severity": "high",
+            "join_url": "https://teams.microsoft.com/l/meetup-join/abc",
+        }
+        mock_redis.xack.assert_awaited_once_with("rootcauseway:events", "warroom-service", b"1-0")
+
+    async def test_created_event_missing_incident_id_skips_notify(
+        self, consumer, mock_redis, mock_notifier, org_id,
+    ):
+        envelope = {
+            "event_id": str(uuid.uuid4()),
+            "event_type": "warroom.meeting.created",
+            "org_id": org_id,
+            "timestamp": "2026-08-24T10:00:00Z",
+            "payload": {},
+        }
+        fields = {
+            b"org_id": org_id.encode(),
+            b"event_type": b"warroom.meeting.created",
+            b"payload": json.dumps(envelope).encode(),
+            b"published_at": b"2026-08-24T10:00:00Z",
+        }
+
+        ok = await consumer._process_entry(b"1-0", fields)
+
+        assert ok is True
+        mock_notifier.notify.assert_not_awaited()
+        mock_redis.xack.assert_awaited_once()
+
+    async def test_created_event_notify_failure_is_acked_not_retried_forever(
+        self, consumer, mock_redis, mock_notifier, created_stream_fields,
+    ):
+        mock_notifier.notify.side_effect = RuntimeError("channel unreachable")
+
+        ok = await consumer._process_entry(b"1-0", created_stream_fields)
+
+        assert ok is True
+        mock_redis.xack.assert_awaited_once()
 
     async def test_missing_meeting_id_skips_backend_call(
         self, consumer, mock_redis, mock_backend, org_id,

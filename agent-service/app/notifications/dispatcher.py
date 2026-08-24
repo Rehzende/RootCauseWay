@@ -295,6 +295,7 @@ class NotificationDispatcher:
             "runbook_started": "Runbook Execution Started",
             "runbook_completed": "Runbook Execution Completed",
             "escalation": "Incident Escalated",
+            "war_room_created": "War Room Started",
         }
         title = titles.get(event_type, f"Incident Update: {event_type}")
 
@@ -306,6 +307,8 @@ class NotificationDispatcher:
             body_parts.append(f"Root Cause: {data['root_cause']}")
         if data.get("summary"):
             body_parts.append(f"Summary: {data['summary']}")
+        if data.get("join_url"):
+            body_parts.append(f"Join: {data['join_url']}")
 
         color_map = {"critical": "FF0000", "high": "FF6600", "medium": "FFCC00", "low": "00CC00"}
 

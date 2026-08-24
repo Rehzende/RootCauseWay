@@ -186,6 +186,29 @@ func (s *WarRoomService) CreateWarRoom(ctx context.Context, incidentID uuid.UUID
 		}
 	}
 
+	// Publishes warroom.meeting.created so agent-service's WarRoomConsumer
+	// can notify configured channels (Slack/Teams/webhook/PagerDuty) with
+	// the join link. Before this, the link only ever reached whoever opened
+	// the incident in RootCauseWay itself -- nobody got paged/pinged.
+	if s.publisher != nil {
+		envelope := models.EventEnvelope{
+			EventID:   uuid.New(),
+			EventType: "warroom.meeting.created",
+			OrgID:     incident.OrgID,
+			Timestamp: now,
+			Payload: models.WarRoomMeetingCreatedPayload{
+				MeetingID:  meeting.ID,
+				IncidentID: incidentID,
+				JoinURL:    joinURL,
+				Severity:   incident.Severity,
+			},
+		}
+		channel := fmt.Sprintf("rootcauseway:%s:warroom.meeting.created", incident.OrgID.String())
+		if err := s.publisher.Publish(ctx, channel, envelope); err != nil {
+			slog.Error("failed to publish warroom.meeting.created event", "meeting_id", meeting.ID, "error", err)
+		}
+	}
+
 	return meeting, nil
 }
 
