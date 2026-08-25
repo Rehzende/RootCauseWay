@@ -500,15 +500,25 @@ func (r *PgIncidentRepository) ListOpenBySoftwareIDs(ctx context.Context, orgID 
 }
 
 // FindByFingerprint returns the incident behind the most recent alert snapshot
-// carrying the given fingerprint (within the recency window), or nil if none is
-// found. Used for literal-repeat alert dedup.
+// carrying the given fingerprint, or nil if none is found. Used for
+// literal-repeat alert dedup. Matches when EITHER the alert snapshot is
+// within the recency window OR the incident is still unresolved -- a
+// flapping alert (fires, resolves, fires again) whose gaps exceed the
+// window must keep landing on the same incident for as long as that
+// incident stays open, otherwise a slow-flapping root cause spawns a new
+// incident (and re-runs the whole agent pipeline) every cycle instead of
+// just adding a timeline event to the one already tracking it. Found live:
+// a stale LLM endpoint made k8s-agent's swallowed-error alert flap on a
+// 10-30min cadence, wider than the old 15min window, creating 20+ duplicate
+// incidents before this was caught.
 func (r *PgIncidentRepository) FindByFingerprint(ctx context.Context, orgID uuid.UUID, fingerprint string, since time.Time) (*models.Incident, error) {
 	var i models.Incident
 	err := r.pool.QueryRow(ctx,
 		`SELECT i.id, i.org_id, i.software_id, i.title, COALESCE(i.description,''), i.severity, i.status, i.assignee_id, COALESCE(i.source_alert_id,''), COALESCE(i.root_cause,''), COALESCE(i.mitigation,''), i.created_at, i.updated_at, i.resolved_at
 		 FROM incidents i
 		 JOIN alert_snapshots a ON a.incident_id = i.id
-		 WHERE i.org_id=$1 AND a.normalized->>'fingerprint' = $2 AND a.created_at >= $3
+		 WHERE i.org_id=$1 AND a.normalized->>'fingerprint' = $2
+		   AND (a.created_at >= $3 OR i.status NOT IN ('resolved', 'closed'))
 		 ORDER BY a.created_at DESC
 		 LIMIT 1`, orgID, fingerprint, since).
 		Scan(&i.ID, &i.OrgID, &i.SoftwareID, &i.Title, &i.Description, &i.Severity, &i.Status, &i.AssigneeID, &i.SourceAlertID, &i.RootCause, &i.Mitigation, &i.CreatedAt, &i.UpdatedAt, &i.ResolvedAt)

@@ -36,7 +36,7 @@ class CorrelationEngine:
     """
 
     DEFAULT_TIME_WINDOW = 300  # 5 minutes
-    DEFAULT_DEDUP_WINDOW = 900  # 15 minutes; see settings.correlation_dedup_window_seconds
+    DEFAULT_DEDUP_WINDOW = 3600  # 1 hour; see settings.correlation_dedup_window_seconds
 
     async def check_correlation(
         self,

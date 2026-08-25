@@ -325,6 +325,11 @@ class AlertWorker:
             org_id=org_id,
             software_id=str(payload.software_id),
             alert=alert_dict,
+            # dedup_window_seconds was never actually threaded through here
+            # before -- CorrelationEngine's own class default (900s) was
+            # silently used regardless of this setting. Wired now so
+            # correlation_dedup_window_seconds is the true source of truth.
+            dedup_window_seconds=get_settings().correlation_dedup_window_seconds,
             exclude_incident_id=payload.incident_id,
         )
 

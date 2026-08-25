@@ -61,7 +61,11 @@ class Settings(BaseSettings):
 
     # Correlation engine: dependency-graph cascades + fingerprint dedup
     correlation_time_window_seconds: int = 300  # default same-service correlation window
-    correlation_dedup_window_seconds: int = 900  # 15 min; literal-repeat alert dedup window
+    # 1h floor for a flapping alert's dedup window -- the backend query also
+    # matches regardless of window when the prior incident is still
+    # unresolved (see PgIncidentRepository.FindByFingerprint), so this value
+    # only matters for how far back to look once that incident IS resolved.
+    correlation_dedup_window_seconds: int = 3600
 
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 

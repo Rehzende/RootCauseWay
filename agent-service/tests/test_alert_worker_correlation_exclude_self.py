@@ -80,6 +80,32 @@ async def test_correlation_check_excludes_the_incident_this_alert_created(worker
 
 
 @pytest.mark.asyncio
+async def test_correlation_check_uses_configured_dedup_window(worker):
+    """dedup_window_seconds used to never be threaded through from settings
+    at all -- CorrelationEngine's own class default (900s) was silently used
+    regardless of correlation_dedup_window_seconds. Pins the wiring fix."""
+    org_id = uuid.uuid4()
+    incident_id = uuid.uuid4()
+    software_id = uuid.uuid4()
+    snapshot_id = uuid.uuid4()
+
+    with patch.object(
+        worker._correlation, "check_correlation", new=AsyncMock(return_value=None),
+    ) as mock_check:
+        with patch("app.workers.alert_worker.SnapshotCollector") as MockCollector:
+            MockCollector.return_value.collect_snapshots = AsyncMock(return_value=[])
+            with patch.object(worker._orchestrator, "handle_incident", new=AsyncMock(return_value={})):
+                await worker._handle_message(
+                    _alert_received_message(org_id, incident_id, software_id, snapshot_id)
+                )
+
+    mock_check.assert_awaited_once()
+    call_kwargs = mock_check.call_args[1]
+    from app.config.settings import get_settings
+    assert call_kwargs["dedup_window_seconds"] == get_settings().correlation_dedup_window_seconds
+
+
+@pytest.mark.asyncio
 async def test_self_only_match_no_longer_short_circuits_the_pipeline(worker):
     """Direct regression pin: before the fix, this exact scenario (the only
     "open incident" found is the one this alert created) made
