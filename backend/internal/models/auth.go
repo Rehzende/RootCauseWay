@@ -17,8 +17,13 @@ type Role struct {
 	Slug        string    `json:"slug"`
 	Description string    `json:"description"`
 	IsSystem    bool      `json:"is_system"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	// Permissions is populated by RoleService.List/GetByID (via
+	// RolePermissionRepository.ListByRole) -- never set by the repository
+	// layer directly, since PgRoleRepository's queries only touch the
+	// roles table itself.
+	Permissions []Permission `json:"permissions,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
 // CreateRoleRequest is the request body for creating a role.

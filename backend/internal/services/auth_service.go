@@ -54,11 +54,33 @@ func (s *RoleService) Create(ctx context.Context, orgID uuid.UUID, req models.Cr
 }
 
 func (s *RoleService) GetByID(ctx context.Context, id uuid.UUID) (*models.Role, error) {
-	return s.roleRepo.GetByID(ctx, id)
+	role, err := s.roleRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if perms, err := s.rolePermRepo.ListByRole(ctx, id); err == nil {
+		role.Permissions = perms
+	}
+	return role, nil
 }
 
+// List returns the org's roles with each one's Permissions populated --
+// same bug class as UserService.List (see its doc comment): neither this
+// nor GetByID above ever set Permissions before, so the Roles page always
+// showed "0 permissions" and every checkbox in the permission matrix
+// rendered unchecked, regardless of what role_permissions actually held
+// (confirmed live: Admin had 24 real grants, UI showed none of them).
 func (s *RoleService) List(ctx context.Context, orgID uuid.UUID, page, perPage int) ([]models.Role, int, error) {
-	return s.roleRepo.List(ctx, orgID, page, perPage)
+	roles, total, err := s.roleRepo.List(ctx, orgID, page, perPage)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range roles {
+		if perms, err := s.rolePermRepo.ListByRole(ctx, roles[i].ID); err == nil {
+			roles[i].Permissions = perms
+		}
+	}
+	return roles, total, nil
 }
 
 func (s *RoleService) Update(ctx context.Context, id uuid.UUID, req models.CreateRoleRequest) (*models.Role, error) {
