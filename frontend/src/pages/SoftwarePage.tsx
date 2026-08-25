@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, X, Cloud, Database,
-  Users, BarChart3, Link2, Tag, Server, ArrowLeft, KeyRound, ShieldCheck, Activity,
+  Users, BarChart3, Link2, Tag, Server, ArrowLeft, KeyRound, ShieldCheck, Activity, Pencil,
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import {
@@ -595,30 +595,36 @@ function CompletenessCard({ softwareId }: { softwareId: string }) {
 }
 
 // -- Detail view --
-function SoftwareDetail({ software, onBack }: { software: SoftwareEntry; onBack: () => void }) {
+function SoftwareDetail({ software, onBack, onEdit }: { software: SoftwareEntry; onBack: () => void; onEdit: (s: SoftwareEntry) => void }) {
   return (
     <div className="p-8">
       <button onClick={onBack} className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
         <ArrowLeft className="h-4 w-4" /> Back to Catalog
       </button>
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">{software.name}</h1>
-        <code className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{software.slug}</code>
-        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-          {softwareTypeLabel[software.type] ?? software.type}
-        </span>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${criticalityBadge[software.criticality] ?? 'bg-gray-100 text-gray-700'}`}>
-          {software.criticality} criticality
-        </span>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-          software.status === 'active' ? 'bg-green-100 text-green-800' :
-          software.status === 'deprecated' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
-        }`}>{software.status}</span>
-        {software.cloud_provider && (
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cloudBadge[software.cloud_provider] ?? 'bg-gray-100 text-gray-800'}`}>
-            {software.cloud_provider.replace('_', ' ').toUpperCase()}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900">{software.name}</h1>
+          <code className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{software.slug}</code>
+          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+            {softwareTypeLabel[software.type] ?? software.type}
           </span>
-        )}
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${criticalityBadge[software.criticality] ?? 'bg-gray-100 text-gray-700'}`}>
+            {software.criticality} criticality
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+            software.status === 'active' ? 'bg-green-100 text-green-800' :
+            software.status === 'deprecated' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
+          }`}>{software.status}</span>
+          {software.cloud_provider && (
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cloudBadge[software.cloud_provider] ?? 'bg-gray-100 text-gray-800'}`}>
+              {software.cloud_provider.replace('_', ' ').toUpperCase()}
+            </span>
+          )}
+        </div>
+        <button onClick={() => onEdit(software)}
+          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <Pencil className="h-4 w-4" /> Edit
+        </button>
       </div>
       {software.description && <p className="mt-2 text-sm text-gray-600">{software.description}</p>}
 
@@ -767,8 +773,12 @@ export function SoftwarePage() {
 
   const updateMut = useMutation({
     mutationFn: (data: CreateSoftwareRequest) => updateSoftware(editingId!, data),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['software'] });
+      // Editing from the detail view keeps selectedSoftware pointing at the
+      // pre-edit object -- without this it silently kept showing stale data
+      // after a successful save until you left and re-opened the detail.
+      setSelectedSoftware((prev) => (prev && prev.id === updated.id ? updated : prev));
       setModalMode(null);
       setEditingId(null);
       setForm(emptyForm());
@@ -790,7 +800,7 @@ export function SoftwarePage() {
   };
 
   if (selectedSoftware) {
-    return <SoftwareDetail software={selectedSoftware} onBack={() => setSelectedSoftware(null)} />;
+    return <SoftwareDetail software={selectedSoftware} onBack={() => setSelectedSoftware(null)} onEdit={handleEdit} />;
   }
 
   const columns: Column<SoftwareEntry>[] = [
