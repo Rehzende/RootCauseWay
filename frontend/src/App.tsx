@@ -32,6 +32,7 @@ import { NotificationChannelsPage } from '@/pages/NotificationChannelsPage';
 import { ChangeEventsPage } from '@/pages/ChangeEventsPage';
 import { SLODashboardPage } from '@/pages/SLODashboardPage';
 import { RetentionPage } from '@/pages/RetentionPage';
+import { AccessDeniedPage } from '@/components/PermissionGate';
 import type { ReactNode } from 'react';
 
 const queryClient = new QueryClient({
@@ -50,6 +51,16 @@ function GuestGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+// Blocks direct navigation to a route the user can't read at all --
+// hiding the sidebar link (AppLayout) stops the click, this stops typing
+// the URL. Every route below that maps to a resource in ROUTE_RESOURCE
+// gets wrapped in this; Dashboard/onboarding are intentionally unwrapped.
+function RequireResource({ resource, children }: { resource: string; children: ReactNode }) {
+  const { hasPermission } = useAuth();
+  if (!hasPermission(resource, 'read')) return <AccessDeniedPage />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -64,31 +75,31 @@ export default function App() {
                 <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/onboarding" element={<OnboardingPage />} />
-                  <Route path="/quarantine" element={<QuarantinePage />} />
-                  <Route path="/software" element={<SoftwarePage />} />
-                  <Route path="/agents" element={<AgentsPage />} />
-                  <Route path="/skills" element={<SkillsPage />} />
-                  <Route path="/skills/:id" element={<SkillDetailPage />} />
-                  <Route path="/marketplace" element={<MarketplacePage />} />
-                  <Route path="/marketplace/:slug" element={<MarketplaceDetailPage />} />
-                  <Route path="/data-sources" element={<DataSourcesPage />} />
-                  <Route path="/webhooks" element={<WebhooksPage />} />
-                  <Route path="/incidents" element={<IncidentsPage />} />
-                  <Route path="/incidents/:id" element={<IncidentDetailPage />} />
-                  <Route path="/credentials" element={<CredentialsPage />} />
-                  <Route path="/analytics" element={<AnalyticsPage />} />
-                  <Route path="/runbooks" element={<RunbooksPage />} />
-                  <Route path="/runbooks/:id" element={<RunbookDetailPage />} />
-                  <Route path="/notifications" element={<NotificationsPage />} />
-                  <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
-                  <Route path="/notification-channels" element={<NotificationChannelsPage />} />
-                  <Route path="/change-events" element={<ChangeEventsPage />} />
-                  <Route path="/slo-dashboard" element={<SLODashboardPage />} />
-                  <Route path="/retention" element={<RetentionPage />} />
-                  <Route path="/users" element={<UsersPage />} />
-                  <Route path="/roles" element={<RolesPage />} />
-                  <Route path="/audit-log" element={<AuditLogPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/quarantine" element={<RequireResource resource="incidents"><QuarantinePage /></RequireResource>} />
+                  <Route path="/software" element={<RequireResource resource="software"><SoftwarePage /></RequireResource>} />
+                  <Route path="/agents" element={<RequireResource resource="agents"><AgentsPage /></RequireResource>} />
+                  <Route path="/skills" element={<RequireResource resource="skills"><SkillsPage /></RequireResource>} />
+                  <Route path="/skills/:id" element={<RequireResource resource="skills"><SkillDetailPage /></RequireResource>} />
+                  <Route path="/marketplace" element={<RequireResource resource="marketplace"><MarketplacePage /></RequireResource>} />
+                  <Route path="/marketplace/:slug" element={<RequireResource resource="marketplace"><MarketplaceDetailPage /></RequireResource>} />
+                  <Route path="/data-sources" element={<RequireResource resource="observability"><DataSourcesPage /></RequireResource>} />
+                  <Route path="/webhooks" element={<RequireResource resource="webhooks"><WebhooksPage /></RequireResource>} />
+                  <Route path="/incidents" element={<RequireResource resource="incidents"><IncidentsPage /></RequireResource>} />
+                  <Route path="/incidents/:id" element={<RequireResource resource="incidents"><IncidentDetailPage /></RequireResource>} />
+                  <Route path="/credentials" element={<RequireResource resource="credentials"><CredentialsPage /></RequireResource>} />
+                  <Route path="/analytics" element={<RequireResource resource="analytics"><AnalyticsPage /></RequireResource>} />
+                  <Route path="/runbooks" element={<RequireResource resource="runbooks"><RunbooksPage /></RequireResource>} />
+                  <Route path="/runbooks/:id" element={<RequireResource resource="runbooks"><RunbookDetailPage /></RequireResource>} />
+                  <Route path="/notifications" element={<RequireResource resource="notifications"><NotificationsPage /></RequireResource>} />
+                  <Route path="/knowledge-base" element={<RequireResource resource="knowledge_base"><KnowledgeBasePage /></RequireResource>} />
+                  <Route path="/notification-channels" element={<RequireResource resource="notifications"><NotificationChannelsPage /></RequireResource>} />
+                  <Route path="/change-events" element={<RequireResource resource="software"><ChangeEventsPage /></RequireResource>} />
+                  <Route path="/slo-dashboard" element={<RequireResource resource="slo"><SLODashboardPage /></RequireResource>} />
+                  <Route path="/retention" element={<RequireResource resource="settings"><RetentionPage /></RequireResource>} />
+                  <Route path="/users" element={<RequireResource resource="users"><UsersPage /></RequireResource>} />
+                  <Route path="/roles" element={<RequireResource resource="roles"><RolesPage /></RequireResource>} />
+                  <Route path="/audit-log" element={<RequireResource resource="audit"><AuditLogPage /></RequireResource>} />
+                  <Route path="/settings" element={<RequireResource resource="settings"><SettingsPage /></RequireResource>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

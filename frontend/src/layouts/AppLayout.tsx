@@ -9,6 +9,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import api from '@/services/api';
+import { ROUTE_RESOURCE } from '@/config/permissions';
 
 interface NavItem {
   to: string;
@@ -73,8 +74,22 @@ const navCategories: NavCategory[] = [
 ];
 
 export function AppLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
   const { isConnected } = useWebSocket();
+
+  // Hide nav links to resources the user can't read at all -- a visible
+  // "Administration" section full of links that all 403 on click is its
+  // own kind of confusing/unsafe-looking UI. Dashboard has no entry in
+  // ROUTE_RESOURCE, so it's never filtered out.
+  const visibleCategories = navCategories
+    .map((category) => ({
+      ...category,
+      items: category.items.filter((item) => {
+        const resource = ROUTE_RESOURCE[item.to];
+        return !resource || hasPermission(resource, 'read');
+      }),
+    }))
+    .filter((category) => category.items.length > 0);
 
   const { data: quarantineCount } = useQuery({
     queryKey: ['quarantine-count'],
@@ -94,7 +109,7 @@ export function AppLayout() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-2">
-          {navCategories.map((category, idx) => (
+          {visibleCategories.map((category, idx) => (
             <div key={category.title} className={idx > 0 ? 'mt-4' : ''}>
               <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
                 {category.title}

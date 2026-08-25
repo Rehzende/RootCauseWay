@@ -557,18 +557,29 @@ func SeedDefaultRoles(ctx context.Context, roleRepo auth.RoleRepository, permRep
 	}
 	roles := []roleDef{
 		{"Admin", "admin", "Full access to all resources", []string{"*:*"}},
+		// Operational/day-to-day resources only -- same tier the 032
+		// migration applies to existing orgs' Operator role. No users,
+		// roles, credentials, audit, or settings: those stay Admin-only.
 		{"Operator", "operator", "Manage incidents, software, agents, and runbooks", []string{
 			"incidents:read", "incidents:write", "incidents:delete",
 			"software:read", "software:write",
 			"agents:read", "agents:write",
 			"runbooks:read", "runbooks:write", "runbooks:execute",
 			"webhooks:read", "webhooks:write",
-			"knowledge-base:read", "knowledge-base:write",
+			"knowledge_base:read", "knowledge_base:write",
+			"marketplace:read", "marketplace:write",
+			"observability:read", "observability:write",
+			"slo:read", "slo:write",
 		}},
-		{"Viewer", "viewer", "Read-only access to all resources", []string{
+		// Read-only, and only on the resources that make up the product's
+		// actual data (incidents, catalog, knowledge base, ...) -- not on
+		// administration resources (users, roles, credentials, audit,
+		// settings). A reader should see what happened, not who's allowed
+		// to change it. See migration 033.
+		{"Viewer", "viewer", "Read-only access to operational resources", []string{
 			"incidents:read", "software:read", "agents:read", "runbooks:read",
-			"webhooks:read", "knowledge-base:read", "analytics:read",
-			"audit-log:read", "users:read", "roles:read",
+			"webhooks:read", "knowledge_base:read", "marketplace:read",
+			"observability:read", "slo:read", "analytics:read",
 		}},
 	}
 
