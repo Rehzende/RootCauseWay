@@ -31,6 +31,12 @@ type CreateRoleRequest struct {
 	Name        string `json:"name" binding:"required"`
 	Slug        string `json:"slug" binding:"required"`
 	Description string `json:"description"`
+	// PermissionIDs: grant these permissions to the role at creation time.
+	// Also accepted (but currently ignored) by UpdateRole, which reuses
+	// this same request shape -- permission changes on an existing role go
+	// through the dedicated Grant/RevokePermission endpoints instead,
+	// same as the rest of the Permission Matrix UI.
+	PermissionIDs []uuid.UUID `json:"permission_ids,omitempty"`
 }
 
 // Permission represents a granular permission.

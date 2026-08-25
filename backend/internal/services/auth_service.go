@@ -50,6 +50,12 @@ func (s *RoleService) Create(ctx context.Context, orgID uuid.UUID, req models.Cr
 	if err := s.roleRepo.Create(ctx, role); err != nil {
 		return nil, err
 	}
+	for _, permID := range req.PermissionIDs {
+		_ = s.rolePermRepo.Grant(ctx, role.ID, permID)
+	}
+	if perms, err := s.rolePermRepo.ListByRole(ctx, role.ID); err == nil {
+		role.Permissions = perms
+	}
 	return role, nil
 }
 

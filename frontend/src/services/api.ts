@@ -477,7 +477,7 @@ export const deleteUser = (id: string) =>
 export const listRoles = (params?: { page?: number; per_page?: number }) =>
   api.get<PaginatedResponse<RoleWithPermissions>>('/roles', { params }).then((r) => r.data);
 
-export const createRole = (data: { name: string; slug: string; description?: string }) =>
+export const createRole = (data: { name: string; slug: string; description?: string; permission_ids?: string[] }) =>
   api.post<RoleWithPermissions>('/roles', data).then((r) => r.data);
 
 export const getRole = (id: string) =>

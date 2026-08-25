@@ -6,38 +6,101 @@ import { X, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import type { RoleWithPermissions, Permission } from '@/types/api';
 
-function CreateRoleModal({ onClose }: { onClose: () => void }) {
+// Selects permissions before a role exists yet, so has no role.id to grant
+// against -- unlike PermissionMatrix (which grants/revokes immediately via
+// mutation against an existing role), this just tracks a local selection
+// that the caller submits as part of the create request.
+function PermissionSelector({
+  allPermissions, selected, onChange,
+}: {
+  allPermissions: Permission[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const resources = [...new Set(allPermissions.map((p) => p.resource))].sort();
+  const actions = [...new Set(allPermissions.map((p) => p.action))].sort();
+  const findPerm = (resource: string, action: string) =>
+    allPermissions.find((p) => p.resource === resource && p.action === action);
+  const toggle = (permId: string) => {
+    const next = new Set(selected);
+    next.has(permId) ? next.delete(permId) : next.add(permId);
+    onChange(next);
+  };
+
+  return (
+    <div className="overflow-x-auto rounded-md border border-gray-200">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr>
+            <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Resource</th>
+            {actions.map((a) => (
+              <th key={a} className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500">{a}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {resources.map((resource) => (
+            <tr key={resource}>
+              <td className="px-3 py-2 font-medium text-gray-700">{resource}</td>
+              {actions.map((action) => {
+                const perm = findPerm(resource, action);
+                if (!perm) return <td key={action} className="px-3 py-2 text-center"><span className="text-gray-300">-</span></td>;
+                return (
+                  <td key={action} className="px-3 py-2 text-center">
+                    <input type="checkbox" checked={selected.has(perm.id)} onChange={() => toggle(perm.id)}
+                      className="rounded border-gray-300" />
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CreateRoleModal({ allPermissions, onClose }: { allPermissions: Permission[]; onClose: () => void }) {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
+  const [permissionIds, setPermissionIds] = useState<Set<string>>(new Set());
 
   const mutation = useMutation({
-    mutationFn: () => createRole({ name, slug, description }),
+    mutationFn: () => createRole({ name, slug, description, permission_ids: [...permissionIds] }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['roles'] }); onClose(); addToast({ type: 'success', title: 'Role created successfully' }); },
     onError: (err: any) => { addToast({ type: 'error', title: 'Failed to create role', message: err?.response?.data?.error || err.message }); },
   });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">Create Role</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
         <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Slug</label>
-            <input value={slug} onChange={(e) => setSlug(e.target.value)} required className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Slug</label>
+              <input value={slug} onChange={(e) => setSlug(e.target.value)} required className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Permissions <span className="font-normal text-gray-400">({permissionIds.size} selected)</span>
+            </label>
+            <PermissionSelector allPermissions={allPermissions} selected={permissionIds} onChange={setPermissionIds} />
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
@@ -229,7 +292,7 @@ export function RolesPage() {
         </div>
       )}
 
-      {showCreate && <CreateRoleModal onClose={() => setShowCreate(false)} />}
+      {showCreate && <CreateRoleModal allPermissions={allPermissions} onClose={() => setShowCreate(false)} />}
       {selectedRole && <RoleDetailModal role={selectedRole} allPermissions={allPermissions} onClose={() => setSelectedRole(null)} />}
     </div>
   );

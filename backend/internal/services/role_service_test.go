@@ -143,6 +143,54 @@ func TestRoleService_GetByID_PopulatesPermissions(t *testing.T) {
 	assert.Equal(t, "software", role.Permissions[0].Resource)
 }
 
+// TestRoleService_Create_GrantsRequestedPermissions pins the fix for
+// "ao criar uma role nao posso definir as permissoes": CreateRoleRequest
+// had no way to carry permission ids at all, so a new role always started
+// with zero permissions and every one had to be granted one-by-one
+// afterward through the Permission Matrix. PermissionIDs is now granted
+// right after the role row is created, and the returned role's
+// Permissions reflects what actually landed (not just an echo of the
+// request) via the same ListByRole path GetByID/List use.
+func TestRoleService_Create_GrantsRequestedPermissions(t *testing.T) {
+	roleRepo := new(MockRoleRepo)
+	rolePermRepo := new(MockRolePermRepo)
+	svc := newTestRoleService(roleRepo, rolePermRepo)
+
+	orgID := uuid.New()
+	perm1 := uuid.New()
+	perm2 := uuid.New()
+
+	roleRepo.On("Create", mock.Anything, mock.AnythingOfType("*models.Role")).Return(nil)
+	rolePermRepo.On("Grant", mock.Anything, mock.Anything, perm1).Return(nil)
+	rolePermRepo.On("Grant", mock.Anything, mock.Anything, perm2).Return(nil)
+	rolePermRepo.On("ListByRole", mock.Anything, mock.Anything).Return(
+		[]models.Permission{{ID: perm1, Resource: "incidents", Action: "read"}, {ID: perm2, Resource: "incidents", Action: "write"}}, nil,
+	)
+
+	req := models.CreateRoleRequest{Name: "On-Call", Slug: "on-call", PermissionIDs: []uuid.UUID{perm1, perm2}}
+	role, err := svc.Create(context.Background(), orgID, req)
+
+	require.NoError(t, err)
+	rolePermRepo.AssertCalled(t, "Grant", mock.Anything, role.ID, perm1)
+	rolePermRepo.AssertCalled(t, "Grant", mock.Anything, role.ID, perm2)
+	assert.Len(t, role.Permissions, 2)
+}
+
+func TestRoleService_Create_NoPermissionIDsGrantsNone(t *testing.T) {
+	roleRepo := new(MockRoleRepo)
+	rolePermRepo := new(MockRolePermRepo)
+	svc := newTestRoleService(roleRepo, rolePermRepo)
+
+	roleRepo.On("Create", mock.Anything, mock.AnythingOfType("*models.Role")).Return(nil)
+	rolePermRepo.On("ListByRole", mock.Anything, mock.Anything).Return([]models.Permission{}, nil)
+
+	role, err := svc.Create(context.Background(), uuid.New(), models.CreateRoleRequest{Name: "Empty", Slug: "empty"})
+
+	require.NoError(t, err)
+	assert.Empty(t, role.Permissions)
+	rolePermRepo.AssertNotCalled(t, "Grant", mock.Anything, mock.Anything, mock.Anything)
+}
+
 func TestRoleService_List_RepositoryErrorPropagates(t *testing.T) {
 	roleRepo := new(MockRoleRepo)
 	rolePermRepo := new(MockRolePermRepo)
