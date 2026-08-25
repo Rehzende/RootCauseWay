@@ -56,6 +56,10 @@ func (m *MockIncidentRepo) GetEvidence(ctx context.Context, incidentID uuid.UUID
 	return args.Get(0).([]models.IncidentEvidence), args.Error(1)
 }
 
+func (m *MockIncidentRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	return m.Called(ctx, id).Error(0)
+}
+
 type MockAlertSnapshotRepo struct {
 	mock.Mock
 }
@@ -234,6 +238,24 @@ func TestIncidentService_Update_InvalidAssigneeIDReturnsError(t *testing.T) {
 
 	require.Error(t, err)
 	repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
+// TestIncidentService_Delete pins the fix for "nao tem opcao de deletar
+// incidente, mas tem permissao" -- the incidents:delete permission has
+// existed in the RBAC catalog since migration 010, but no repository
+// method, service method, handler, or route ever backed it.
+func TestIncidentService_Delete(t *testing.T) {
+	repo := new(MockIncidentRepo)
+	snapRepo := new(MockAlertSnapshotRepo)
+	svc := NewIncidentService(repo, snapRepo)
+
+	id := uuid.New()
+	repo.On("Delete", mock.Anything, id).Return(nil)
+
+	err := svc.Delete(context.Background(), id)
+
+	require.NoError(t, err)
+	repo.AssertCalled(t, "Delete", mock.Anything, id)
 }
 
 func TestIncidentService_AddEvent(t *testing.T) {

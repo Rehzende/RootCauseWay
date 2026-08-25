@@ -215,6 +215,10 @@ func (m *MockIncidentSvc) ListEvidence(ctx context.Context, incidentID uuid.UUID
 	return args.Get(0).([]models.IncidentEvidence), args.Error(1)
 }
 
+func (m *MockIncidentSvc) Delete(ctx context.Context, id uuid.UUID) error {
+	return m.Called(ctx, id).Error(0)
+}
+
 type MockIngestionSvc struct{ mock.Mock }
 
 func (m *MockIngestionSvc) IngestAlert(ctx context.Context, token string, rawPayload json.RawMessage) (*services.IngestionResult, error) {
@@ -248,6 +252,7 @@ func setupRouter(h *Handler) *gin.Engine {
 	api.POST("/ingest/:token", h.IngestAlert)
 	api.GET("/incidents/:id", h.GetIncident)
 	api.PATCH("/incidents/:id", h.UpdateIncident)
+	api.DELETE("/incidents/:id", h.DeleteIncident)
 	api.POST("/incidents/:id/events", h.AddIncidentEvent)
 	api.POST("/incidents/:id/evidence", h.AddIncidentEvidence)
 
@@ -381,6 +386,45 @@ func TestUpdateIncident_DifferentOrg_Returns404AndDoesNotCallUpdate(t *testing.T
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	incSvc.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// TestDeleteIncident_Success and TestDeleteIncident_DifferentOrg_Returns404
+// pin the new DELETE /incidents/:id route (see incident_handlers.go's
+// DeleteIncident doc comment: the incidents:delete permission existed in
+// the RBAC catalog with nothing behind it until now).
+func TestDeleteIncident_Success(t *testing.T) {
+	incSvc := new(MockIncidentSvc)
+	h := &Handler{Incidents: incSvc}
+	r := setupRouter(h)
+
+	orgID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	id := uuid.New()
+	incSvc.On("GetByID", mock.Anything, id).Return(&models.Incident{ID: id, OrgID: orgID}, nil)
+	incSvc.On("Delete", mock.Anything, id).Return(nil)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/api/v1/incidents/"+id.String(), nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	incSvc.AssertCalled(t, "Delete", mock.Anything, id)
+}
+
+func TestDeleteIncident_DifferentOrg_Returns404AndDoesNotCallDelete(t *testing.T) {
+	incSvc := new(MockIncidentSvc)
+	h := &Handler{Incidents: incSvc}
+	r := setupRouter(h)
+
+	otherOrgID := uuid.New()
+	id := uuid.New()
+	incSvc.On("GetByID", mock.Anything, id).Return(&models.Incident{ID: id, OrgID: otherOrgID}, nil)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/api/v1/incidents/"+id.String(), nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	incSvc.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
 }
 
 // TestUpdateIncident_InvalidAssigneeID_Returns400 pins the assign-a-person

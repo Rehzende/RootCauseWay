@@ -23,6 +23,7 @@ type IncidentRepository interface {
 	AddEvidence(ctx context.Context, evidence *models.IncidentEvidence) error
 	GetEvents(ctx context.Context, incidentID uuid.UUID) ([]models.IncidentEvent, error)
 	GetEvidence(ctx context.Context, incidentID uuid.UUID) ([]models.IncidentEvidence, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // AlertSnapshotRepository defines the DB operations for alert snapshots
@@ -162,6 +163,10 @@ func (s *IncidentService) Update(ctx context.Context, id uuid.UUID, req models.U
 		return nil, false, err
 	}
 	return incident, justTerminalized, nil
+}
+
+func (s *IncidentService) Delete(ctx context.Context, id uuid.UUID) error {
+	return s.repo.Delete(ctx, id)
 }
 
 func (s *IncidentService) AddEvent(ctx context.Context, incidentID uuid.UUID, actor string, req models.CreateEventRequest) (*models.IncidentEvent, error) {

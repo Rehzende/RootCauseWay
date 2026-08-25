@@ -7,15 +7,16 @@ import { SkeletonDetailPage } from '@/components/Skeleton';
 import {
   ArrowLeft, Clock, User, FileSearch, LayoutGrid, Activity,
   Search, BookOpen, ChevronDown, ThumbsUp, ThumbsDown, X,
-  ExternalLink, GitCommit, Layers,
+  ExternalLink, GitCommit, Layers, Trash2,
 } from 'lucide-react';
 import {
-  getIncidentFull, updateIncident, addIncidentEvent, updateRCI, updateRCA, updatePostmortem,
+  getIncidentFull, updateIncident, deleteIncident, addIncidentEvent, updateRCI, updateRCA, updatePostmortem,
   listA2ATasks, submitFeedback, listSimilarIncidents, listChangeEvents, listAlertGroups,
   approveIncidentStage, listUsers,
 } from '@/services/api';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import type { PresenceUser } from '@/components/PresenceIndicator';
+import { PermissionGate } from '@/components/PermissionGate';
 import { SeverityBadge } from '@/components/SeverityBadge';
 import { StatusBadge } from '@/components/StatusBadge';
 import { IncidentTimeline } from '@/components/IncidentTimeline';
@@ -402,6 +403,18 @@ export function IncidentDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['incident-full', id] }),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: () => deleteIncident(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      addToast({ type: 'success', title: 'Incident deleted' });
+      navigate('/incidents');
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: 'Failed to delete incident', message: err?.response?.data?.error || err.message });
+    },
+  });
+
   const addEventMut = useMutation({
     mutationFn: (data: Parameters<typeof addIncidentEvent>[1]) => addIncidentEvent(id!, data),
     onSuccess: () => {
@@ -556,6 +569,18 @@ export function IncidentDetailPage() {
                 </div>
               )}
             </div>
+            <PermissionGate resource="incidents" action="delete">
+              <button
+                onClick={() => {
+                  if (confirm(`Delete ${formatIncidentCode(incident.incident_number)} - ${incident.title}? This removes its evidence, timeline, and RCA/postmortem too.`)) {
+                    deleteMut.mutate();
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </PermissionGate>
           </div>
         </div>
 

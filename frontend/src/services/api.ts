@@ -166,6 +166,9 @@ export const getIncident = (id: string) =>
 export const updateIncident = (id: string, data: UpdateIncidentRequest) =>
   api.patch<Incident>(`/incidents/${id}`, data).then((r) => r.data);
 
+export const deleteIncident = (id: string) =>
+  api.delete(`/incidents/${id}`);
+
 export const addIncidentEvent = (id: string, data: CreateIncidentEventRequest) =>
   api.post<IncidentEvent>(`/incidents/${id}/events`, data).then((r) => r.data);
 

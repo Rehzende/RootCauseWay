@@ -142,6 +142,28 @@ func (h *Handler) UpdateIncident(c *gin.Context) {
 	c.JSON(http.StatusOK, incident)
 }
 
+// DeleteIncident permanently removes an incident and everything under it
+// (evidence, timeline, RCI/RCA/postmortem, agent runs, ...). The
+// "incidents:delete" permission has existed in the RBAC catalog since
+// migration 010, but nothing ever implemented the endpoint behind it --
+// no repository method, no route -- so the frontend had nowhere to point a
+// delete button even though the permission to gate it already existed.
+func (h *Handler) DeleteIncident(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid id"})
+		return
+	}
+	if _, ok := h.verifyIncidentOwnership(c, id); !ok {
+		return
+	}
+	if err := h.Incidents.Delete(c.Request.Context(), id); err != nil {
+		handleDBError(c, err, "resource")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *Handler) AddIncidentEvent(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

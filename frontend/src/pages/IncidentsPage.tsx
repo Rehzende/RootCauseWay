@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { listIncidents, listSoftware } from '@/services/api';
+import { Trash2 } from 'lucide-react';
+import { listIncidents, listSoftware, deleteIncident } from '@/services/api';
 import { DataTable, type Column } from '@/components/DataTable';
 import { SeverityBadge } from '@/components/SeverityBadge';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SkeletonTable } from '@/components/Skeleton';
 import { NoIncidents } from '@/components/EmptyState';
+import { PermissionGate } from '@/components/PermissionGate';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useToast } from '@/components/Toast';
 import { formatIncidentCode } from '@/lib/incident';
@@ -71,6 +73,12 @@ export function IncidentsPage() {
 
   const softwareList = softwareData?.data ?? [];
 
+  const deleteMut = useMutation({
+    mutationFn: deleteIncident,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['incidents'] }); addToast({ type: 'success', title: 'Incident deleted' }); },
+    onError: (err: any) => { addToast({ type: 'error', title: 'Failed to delete incident', message: err?.response?.data?.error || err.message }); },
+  });
+
   const filteredData = useMemo(() => {
     const items = data?.data ?? [];
     if (!searchText.trim()) return items;
@@ -88,6 +96,21 @@ export function IncidentsPage() {
     { key: 'status', header: 'Status', render: (i) => <StatusBadge status={i.status} /> },
     { key: 'created', header: 'Created', render: (i) => (
       <span className="text-sm text-gray-500">{new Date(i.created_at).toLocaleDateString()}</span>
+    )},
+    { key: 'actions', header: '', render: (i) => (
+      <PermissionGate resource="incidents" action="delete">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirm(`Delete ${formatIncidentCode(i.incident_number)} - ${i.title}? This removes its evidence, timeline, and RCA/postmortem too.`)) {
+              deleteMut.mutate(i.id);
+            }
+          }}
+          className="text-red-400 hover:text-red-600"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </PermissionGate>
     )},
   ];
 

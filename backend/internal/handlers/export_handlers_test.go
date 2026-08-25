@@ -93,6 +93,10 @@ func (m *mockIncidentSvcForExport) ListEvidence(ctx context.Context, incidentID 
 	return args.Get(0).([]models.IncidentEvidence), args.Error(1)
 }
 
+func (m *mockIncidentSvcForExport) Delete(ctx context.Context, id uuid.UUID) error {
+	return m.Called(ctx, id).Error(0)
+}
+
 func setupExportRouter(eh *ExportHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

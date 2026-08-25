@@ -18,6 +18,7 @@ import api, {
   listIncidents,
   getIncident,
   updateIncident,
+  deleteIncident,
   addIncidentEvent,
   addIncidentEvidence,
   getAnalyticsIncidentTrends,
@@ -159,6 +160,11 @@ describe('Incidents API', () => {
   it('updateIncident calls PATCH /incidents/:id', async () => {
     await updateIncident('inc1', { status: 'resolved' });
     expect(api.patch).toHaveBeenCalledWith('/incidents/inc1', { status: 'resolved' });
+  });
+
+  it('deleteIncident calls DELETE /incidents/:id', async () => {
+    await deleteIncident('inc1');
+    expect(api.delete).toHaveBeenCalledWith('/incidents/inc1');
   });
 
   it('addIncidentEvent calls POST /incidents/:id/events', async () => {

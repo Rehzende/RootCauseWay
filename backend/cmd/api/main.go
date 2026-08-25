@@ -513,6 +513,7 @@ func main() {
 	protected.GET("/incidents", h.ListIncidents)
 	protected.GET("/incidents/:id", h.GetIncident)
 	protected.PATCH("/incidents/:id", h.UpdateIncident)
+	protected.DELETE("/incidents/:id", h.DeleteIncident)
 	protected.POST("/incidents/:id/events", h.AddIncidentEvent)
 	protected.POST("/incidents/:id/evidence", h.AddIncidentEvidence)
 

@@ -418,6 +418,41 @@ func (r *PgIncidentRepository) Update(ctx context.Context, i *models.Incident) e
 	return err
 }
 
+// Delete removes an incident and everything under it. Most
+// incident-referencing tables cascade automatically, but four are
+// ON DELETE NO ACTION by design (credential_leases, knowledge_base,
+// notification_log, runbook_executions -- audit/operational trails not
+// meant to silently vanish just because the incident that spawned them
+// did) plus similar_incidents.similar_incident_id (another incident's
+// "this looked like X" pointer at this one) -- all cleared explicitly
+// first, in the same transaction, or the FK constraint blocks the delete
+// outright.
+func (r *PgIncidentRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after a successful Commit
+
+	for _, stmt := range []string{
+		`DELETE FROM credential_leases WHERE incident_id = $1`,
+		`DELETE FROM knowledge_base WHERE incident_id = $1`,
+		`DELETE FROM notification_log WHERE incident_id = $1`,
+		`DELETE FROM runbook_executions WHERE incident_id = $1`,
+		`DELETE FROM similar_incidents WHERE similar_incident_id = $1`,
+	} {
+		if _, err := tx.Exec(ctx, stmt, id); err != nil {
+			return fmt.Errorf("clear NO ACTION dependents: %w", err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM incidents WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("delete incident: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r *PgIncidentRepository) AddEvent(ctx context.Context, e *models.IncidentEvent) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO incident_events (id, incident_id, type, actor, data, created_at) VALUES ($1,$2,$3,$4,$5,$6)`,

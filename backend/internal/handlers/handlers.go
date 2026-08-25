@@ -51,6 +51,7 @@ type IncidentServiceInterface interface {
 	AddEvent(ctx context.Context, incidentID uuid.UUID, actor string, req models.CreateEventRequest) (*models.IncidentEvent, error)
 	AddEvidence(ctx context.Context, incidentID uuid.UUID, req models.CreateEvidenceRequest) (*models.IncidentEvidence, error)
 	ListEvidence(ctx context.Context, incidentID uuid.UUID) ([]models.IncidentEvidence, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type IngestionServiceInterface interface {
