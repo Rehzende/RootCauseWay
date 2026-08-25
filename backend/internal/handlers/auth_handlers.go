@@ -571,15 +571,16 @@ func SeedDefaultRoles(ctx context.Context, roleRepo auth.RoleRepository, permRep
 			"observability:read", "observability:write",
 			"slo:read", "slo:write",
 		}},
-		// Read-only, and only on the resources that make up the product's
-		// actual data (incidents, catalog, knowledge base, ...) -- not on
-		// administration resources (users, roles, credentials, audit,
-		// settings). A reader should see what happened, not who's allowed
-		// to change it. See migration 033.
-		{"Viewer", "viewer", "Read-only access to operational resources", []string{
-			"incidents:read", "software:read", "agents:read", "runbooks:read",
-			"webhooks:read", "knowledge_base:read", "marketplace:read",
-			"observability:read", "slo:read", "analytics:read",
+		// Read-only, and narrowly scoped to the incident-facing/reporting
+		// surface only: incidents, knowledge base, analytics. Not
+		// administration (users, roles, credentials, audit, settings --
+		// see migration 033), and not catalog/integrations either
+		// (software, runbooks, slo, agents, webhooks, observability,
+		// marketplace -- see migration 034). A reader needs to see what
+		// happened, not manage the catalog of things that can happen or
+		// how alerts get wired in.
+		{"Viewer", "viewer", "Read-only access to incidents, knowledge base, and analytics", []string{
+			"incidents:read", "knowledge_base:read", "analytics:read",
 		}},
 	}
 
