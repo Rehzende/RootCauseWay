@@ -29,6 +29,7 @@ import { OrchestratorDecisions } from '@/components/OrchestratorDecisions';
 import { WarRoomPanel } from '@/components/WarRoomPanel';
 import { ApprovalGateBanner } from '@/components/ApprovalGateBanner';
 import { formatIncidentCode } from '@/lib/incident';
+import { criticalityBadge } from '@/lib/software';
 import type { IncidentStatus, AnalysisStatus, A2ATask } from '@/types/api';
 
 const statuses: IncidentStatus[] = ['open', 'investigating', 'mitigated', 'resolved', 'closed'];
@@ -594,6 +595,14 @@ export function IncidentDetailPage() {
                       incident.software.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                     }`}>{incident.software.status}</span>
                   </div>
+                  {incident.software.criticality && (
+                    <div>
+                      <p className="text-xs font-medium uppercase text-gray-500">Criticality</p>
+                      <span className={`inline-block mt-1 rounded-full px-2 py-0.5 text-xs font-medium ${criticalityBadge[incident.software.criticality] ?? 'bg-gray-100 text-gray-700'}`}>
+                        {incident.software.criticality}
+                      </span>
+                    </div>
+                  )}
                   {incident.software.cloud_provider && (
                     <div>
                       <p className="text-xs font-medium uppercase text-gray-500">Cloud</p>

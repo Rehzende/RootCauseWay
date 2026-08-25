@@ -55,8 +55,15 @@ type SoftwareEntry struct {
 	RunbookURL     string          `json:"runbook_url"`
 	DashboardURL   string          `json:"dashboard_url"`
 	Dependencies   json.RawMessage `json:"dependencies"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	// Criticality: critical, high, medium, low -- business-impact tier,
+	// drives default incident severity/escalation priority. Defaults to
+	// "medium" so every existing/not-yet-set entry still has a valid value.
+	Criticality string `json:"criticality"`
+	// Type: service, library, database, job, website, other -- what kind of
+	// thing this catalog entry actually is, for grouping/filtering.
+	Type      string    `json:"type"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // CreateSoftwareRequest is the request body for creating a software entry.
@@ -78,6 +85,8 @@ type CreateSoftwareRequest struct {
 	RunbookURL     string          `json:"runbook_url"`
 	DashboardURL   string          `json:"dashboard_url"`
 	Dependencies   json.RawMessage `json:"dependencies"`
+	Criticality    string          `json:"criticality"`
+	Type           string          `json:"type"`
 }
 
 // AgentConfig holds configuration for an AI agent.

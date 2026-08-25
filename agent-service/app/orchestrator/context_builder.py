@@ -42,6 +42,11 @@ class ContextBuilder:
                 "description": software.get("description", ""),
                 "status": software.get("status", ""),
                 "tags": software.get("tags") or [],
+                # criticality/type: business-impact tier and entry kind, so
+                # the LLM can weigh e.g. a "critical" service's incident more
+                # heavily than a "low"-tier internal job's.
+                "criticality": software.get("criticality", "medium"),
+                "type": software.get("type", "service"),
             },
             "repository_url": software.get("repository_url", ""),
             "pipeline_url": software.get("pipeline_url", ""),

@@ -3,9 +3,10 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/Rehzende/RootCauseway/backend/internal/models"
+	"github.com/Rehzende/RootCauseway/backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/Rehzende/RootCauseway/backend/internal/models"
 )
 
 // --- Software ---
@@ -36,6 +37,10 @@ func (h *Handler) ListSoftware(c *gin.Context) {
 func (h *Handler) CreateSoftware(c *gin.Context) {
 	var req models.CreateSoftwareRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	if err := services.ValidateSoftwareRequest(req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -71,6 +76,10 @@ func (h *Handler) UpdateSoftware(c *gin.Context) {
 	}
 	var req models.CreateSoftwareRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	if err := services.ValidateSoftwareRequest(req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}

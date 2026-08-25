@@ -39,7 +39,10 @@ async def test_build_context_falls_back_to_minimal_context_on_failure():
 
     result = await ContextBuilder().build_context("sw-1", backend, org_id)
 
-    assert result["software"] == {"id": "sw-1", "name": "unknown", "description": "", "status": "", "tags": []}
+    assert result["software"] == {
+        "id": "sw-1", "name": "unknown", "description": "", "status": "", "tags": [],
+        "criticality": "medium", "type": "service",
+    }
     assert result["cloud_resources"] == []
     assert result["databases"] == []
     assert result["infra_details"] == {}
@@ -72,6 +75,8 @@ async def test_build_context_reads_the_real_software_entry_field_names():
         "stakeholders": ["marcos"],
         "sre_team": ["marcos"],
         "architects": [],
+        "criticality": "high",
+        "type": "service",
     }
 
     ctx = await ContextBuilder().build_context("sw-1", backend, org_id)
@@ -79,6 +84,7 @@ async def test_build_context_reads_the_real_software_entry_field_names():
     assert ctx["software"] == {
         "id": "sw-1", "name": "Pulso Backend", "description": "FastAPI backend",
         "status": "active", "tags": ["python", "fastapi"],
+        "criticality": "high", "type": "service",
     }
     assert ctx["repository_url"] == "https://github.com/org/pulso-backend"
     assert ctx["pipeline_url"] == "https://ci.example.com/pulso"

@@ -21,58 +21,53 @@ func NewSoftwareRepository(pool *pgxpool.Pool) *PgSoftwareRepository {
 	return &PgSoftwareRepository{pool: pool}
 }
 
+const softwareColumns = `id, org_id, name, slug, COALESCE(description,''), owner_id, COALESCE(repository_url,''), COALESCE(tags,'[]'::jsonb), status,
+		 COALESCE(pipeline_url,''), COALESCE(cloud_provider,''), COALESCE(cloud_resources,'{}'::jsonb), COALESCE(database_info,'{}'::jsonb), COALESCE(infra_details,'{}'::jsonb), COALESCE(stakeholders,'[]'::jsonb), COALESCE(sre_team,'[]'::jsonb), COALESCE(architects,'[]'::jsonb), COALESCE(runbook_url,''), COALESCE(dashboard_url,''), COALESCE(dependencies,'[]'::jsonb),
+		 COALESCE(criticality,'medium'), COALESCE(type,'service'),
+		 created_at, updated_at`
+
+// scanSoftwareRow scans one software_catalog row (as selected by
+// softwareColumns) via a pgx row-like scanner (*pgx.Row or pgx.Rows both
+// satisfy this).
+func scanSoftwareRow(scan func(dest ...any) error) (*models.SoftwareEntry, error) {
+	var e models.SoftwareEntry
+	var tags []byte
+	if err := scan(&e.ID, &e.OrgID, &e.Name, &e.Slug, &e.Description, &e.OwnerID, &e.RepositoryURL, &tags, &e.Status,
+		&e.PipelineURL, &e.CloudProvider, &e.CloudResources, &e.DatabaseInfo, &e.InfraDetails, &e.Stakeholders, &e.SreTeam, &e.Architects, &e.RunbookURL, &e.DashboardURL, &e.Dependencies,
+		&e.Criticality, &e.Type,
+		&e.CreatedAt, &e.UpdatedAt); err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal(tags, &e.Tags)
+	if e.Tags == nil {
+		e.Tags = []string{}
+	}
+	return &e, nil
+}
+
 func (r *PgSoftwareRepository) Create(ctx context.Context, e *models.SoftwareEntry) error {
 	tags, _ := json.Marshal(e.Tags)
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO software_catalog (id, org_id, name, slug, description, owner_id, repository_url, tags, status, pipeline_url, cloud_provider, cloud_resources, database_info, infra_details, stakeholders, sre_team, architects, runbook_url, dashboard_url, dependencies, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
+		`INSERT INTO software_catalog (id, org_id, name, slug, description, owner_id, repository_url, tags, status, pipeline_url, cloud_provider, cloud_resources, database_info, infra_details, stakeholders, sre_team, architects, runbook_url, dashboard_url, dependencies, criticality, type, created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
 		e.ID, e.OrgID, e.Name, e.Slug, e.Description, e.OwnerID, e.RepositoryURL, tags, e.Status,
 		e.PipelineURL, e.CloudProvider, e.CloudResources, e.DatabaseInfo, e.InfraDetails, e.Stakeholders, e.SreTeam, e.Architects, e.RunbookURL, e.DashboardURL, e.Dependencies,
+		e.Criticality, e.Type,
 		e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
 func (r *PgSoftwareRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.SoftwareEntry, error) {
-	var e models.SoftwareEntry
-	var tags []byte
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, org_id, name, slug, COALESCE(description,''), owner_id, COALESCE(repository_url,''), COALESCE(tags,'[]'::jsonb), status,
-		 COALESCE(pipeline_url,''), COALESCE(cloud_provider,''), COALESCE(cloud_resources,'{}'::jsonb), COALESCE(database_info,'{}'::jsonb), COALESCE(infra_details,'{}'::jsonb), COALESCE(stakeholders,'[]'::jsonb), COALESCE(sre_team,'[]'::jsonb), COALESCE(architects,'[]'::jsonb), COALESCE(runbook_url,''), COALESCE(dashboard_url,''), COALESCE(dependencies,'[]'::jsonb),
-		 created_at, updated_at
-		 FROM software_catalog WHERE id=$1`, id).
-		Scan(&e.ID, &e.OrgID, &e.Name, &e.Slug, &e.Description, &e.OwnerID, &e.RepositoryURL, &tags, &e.Status,
-			&e.PipelineURL, &e.CloudProvider, &e.CloudResources, &e.DatabaseInfo, &e.InfraDetails, &e.Stakeholders, &e.SreTeam, &e.Architects, &e.RunbookURL, &e.DashboardURL, &e.Dependencies,
-			&e.CreatedAt, &e.UpdatedAt)
-	if err != nil {
-		return nil, err
-	}
-	_ = json.Unmarshal(tags, &e.Tags)
-	if e.Tags == nil {
-		e.Tags = []string{}
-	}
-	return &e, nil
+	row := r.pool.QueryRow(ctx, `SELECT `+softwareColumns+` FROM software_catalog WHERE id=$1`, id)
+	return scanSoftwareRow(row.Scan)
 }
 
 func (r *PgSoftwareRepository) FindBySlugOrTag(ctx context.Context, orgID uuid.UUID, label string) (*models.SoftwareEntry, error) {
-	var e models.SoftwareEntry
-	var tags []byte
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, org_id, name, slug, COALESCE(description,''), owner_id, COALESCE(repository_url,''), COALESCE(tags,'[]'::jsonb), status,
-		 COALESCE(pipeline_url,''), COALESCE(cloud_provider,''), COALESCE(cloud_resources,'{}'::jsonb), COALESCE(database_info,'{}'::jsonb), COALESCE(infra_details,'{}'::jsonb), COALESCE(stakeholders,'[]'::jsonb), COALESCE(sre_team,'[]'::jsonb), COALESCE(architects,'[]'::jsonb), COALESCE(runbook_url,''), COALESCE(dashboard_url,''), COALESCE(dependencies,'[]'::jsonb),
-		 created_at, updated_at
+	row := r.pool.QueryRow(ctx,
+		`SELECT `+softwareColumns+`
 		 FROM software_catalog WHERE org_id=$1 AND (slug=$2 OR tags @> $3::jsonb)
-		 LIMIT 1`, orgID, label, fmt.Sprintf(`[%q]`, label)).
-		Scan(&e.ID, &e.OrgID, &e.Name, &e.Slug, &e.Description, &e.OwnerID, &e.RepositoryURL, &tags, &e.Status,
-			&e.PipelineURL, &e.CloudProvider, &e.CloudResources, &e.DatabaseInfo, &e.InfraDetails, &e.Stakeholders, &e.SreTeam, &e.Architects, &e.RunbookURL, &e.DashboardURL, &e.Dependencies,
-			&e.CreatedAt, &e.UpdatedAt)
-	if err != nil {
-		return nil, err
-	}
-	_ = json.Unmarshal(tags, &e.Tags)
-	if e.Tags == nil {
-		e.Tags = []string{}
-	}
-	return &e, nil
+		 LIMIT 1`, orgID, label, fmt.Sprintf(`[%q]`, label))
+	return scanSoftwareRow(row.Scan)
 }
 
 func (r *PgSoftwareRepository) List(ctx context.Context, orgID uuid.UUID, page, perPage int) ([]models.SoftwareEntry, int, error) {
@@ -81,9 +76,7 @@ func (r *PgSoftwareRepository) List(ctx context.Context, orgID uuid.UUID, page, 
 
 	offset := (page - 1) * perPage
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, org_id, name, slug, COALESCE(description,''), owner_id, COALESCE(repository_url,''), COALESCE(tags,'[]'::jsonb), status,
-		 COALESCE(pipeline_url,''), COALESCE(cloud_provider,''), COALESCE(cloud_resources,'{}'::jsonb), COALESCE(database_info,'{}'::jsonb), COALESCE(infra_details,'{}'::jsonb), COALESCE(stakeholders,'[]'::jsonb), COALESCE(sre_team,'[]'::jsonb), COALESCE(architects,'[]'::jsonb), COALESCE(runbook_url,''), COALESCE(dashboard_url,''), COALESCE(dependencies,'[]'::jsonb),
-		 created_at, updated_at
+		`SELECT `+softwareColumns+`
 		 FROM software_catalog WHERE org_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, orgID, perPage, offset)
 	if err != nil {
 		return nil, 0, err
@@ -92,18 +85,11 @@ func (r *PgSoftwareRepository) List(ctx context.Context, orgID uuid.UUID, page, 
 
 	var items []models.SoftwareEntry
 	for rows.Next() {
-		var e models.SoftwareEntry
-		var tags []byte
-		if err := rows.Scan(&e.ID, &e.OrgID, &e.Name, &e.Slug, &e.Description, &e.OwnerID, &e.RepositoryURL, &tags, &e.Status,
-			&e.PipelineURL, &e.CloudProvider, &e.CloudResources, &e.DatabaseInfo, &e.InfraDetails, &e.Stakeholders, &e.SreTeam, &e.Architects, &e.RunbookURL, &e.DashboardURL, &e.Dependencies,
-			&e.CreatedAt, &e.UpdatedAt); err != nil {
+		e, err := scanSoftwareRow(rows.Scan)
+		if err != nil {
 			return nil, 0, err
 		}
-		_ = json.Unmarshal(tags, &e.Tags)
-		if e.Tags == nil {
-			e.Tags = []string{}
-		}
-		items = append(items, e)
+		items = append(items, *e)
 	}
 	if items == nil {
 		items = []models.SoftwareEntry{}
@@ -116,9 +102,11 @@ func (r *PgSoftwareRepository) Update(ctx context.Context, e *models.SoftwareEnt
 	_, err := r.pool.Exec(ctx,
 		`UPDATE software_catalog SET name=$1, slug=$2, description=$3, owner_id=$4, repository_url=$5, tags=$6, status=$7,
 		 pipeline_url=$8, cloud_provider=$9, cloud_resources=$10, database_info=$11, infra_details=$12, stakeholders=$13, sre_team=$14, architects=$15, runbook_url=$16, dashboard_url=$17, dependencies=$18,
-		 updated_at=$19 WHERE id=$20`,
+		 criticality=$19, type=$20,
+		 updated_at=$21 WHERE id=$22`,
 		e.Name, e.Slug, e.Description, e.OwnerID, e.RepositoryURL, tags, e.Status,
 		e.PipelineURL, e.CloudProvider, e.CloudResources, e.DatabaseInfo, e.InfraDetails, e.Stakeholders, e.SreTeam, e.Architects, e.RunbookURL, e.DashboardURL, e.Dependencies,
+		e.Criticality, e.Type,
 		e.UpdatedAt, e.ID)
 	return err
 }
@@ -129,18 +117,19 @@ func (r *PgSoftwareRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // ListDependents returns software catalog entries in the org whose declared
-// `dependencies` array contains the given slug -- i.e. services that depend on
-// (are downstream of) the service identified by slug. Used for dependency-graph
-// cascade correlation.
+// `dependencies` array contains an entry for the given slug -- i.e. services
+// that depend on (are downstream of) the service identified by slug. Used
+// for dependency-graph cascade correlation. Matches regardless of the
+// dependency's `relation` value: jsonb `@>` containment on
+// `[{"slug": "..."}]` matches any array element whose object is a superset
+// of that (i.e. has that slug, whatever its relation).
 func (r *PgSoftwareRepository) ListDependents(ctx context.Context, orgID uuid.UUID, slug string) ([]models.SoftwareEntry, error) {
-	dep, err := json.Marshal([]string{slug})
+	dep, err := json.Marshal([]map[string]string{{"slug": slug}})
 	if err != nil {
 		return nil, err
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, org_id, name, slug, COALESCE(description,''), owner_id, COALESCE(repository_url,''), COALESCE(tags,'[]'::jsonb), status,
-		 COALESCE(pipeline_url,''), COALESCE(cloud_provider,''), COALESCE(cloud_resources,'{}'::jsonb), COALESCE(database_info,'{}'::jsonb), COALESCE(infra_details,'{}'::jsonb), COALESCE(stakeholders,'[]'::jsonb), COALESCE(sre_team,'[]'::jsonb), COALESCE(architects,'[]'::jsonb), COALESCE(runbook_url,''), COALESCE(dashboard_url,''), COALESCE(dependencies,'[]'::jsonb),
-		 created_at, updated_at
+		`SELECT `+softwareColumns+`
 		 FROM software_catalog WHERE org_id=$1 AND dependencies @> $2::jsonb`, orgID, dep)
 	if err != nil {
 		return nil, err
@@ -149,18 +138,11 @@ func (r *PgSoftwareRepository) ListDependents(ctx context.Context, orgID uuid.UU
 
 	var items []models.SoftwareEntry
 	for rows.Next() {
-		var e models.SoftwareEntry
-		var tags []byte
-		if err := rows.Scan(&e.ID, &e.OrgID, &e.Name, &e.Slug, &e.Description, &e.OwnerID, &e.RepositoryURL, &tags, &e.Status,
-			&e.PipelineURL, &e.CloudProvider, &e.CloudResources, &e.DatabaseInfo, &e.InfraDetails, &e.Stakeholders, &e.SreTeam, &e.Architects, &e.RunbookURL, &e.DashboardURL, &e.Dependencies,
-			&e.CreatedAt, &e.UpdatedAt); err != nil {
+		e, err := scanSoftwareRow(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		_ = json.Unmarshal(tags, &e.Tags)
-		if e.Tags == nil {
-			e.Tags = []string{}
-		}
-		items = append(items, e)
+		items = append(items, *e)
 	}
 	if items == nil {
 		items = []models.SoftwareEntry{}
@@ -547,6 +529,23 @@ func (r *PgIncidentRepository) GetEvidence(ctx context.Context, incidentID uuid.
 		items = append(items, e)
 	}
 	return items, nil
+}
+
+// GetIncidentStatsBySoftware returns the total incident count, open
+// (non-resolved/closed) incident count, and the most recent incident's
+// created_at for a software catalog entry -- feeds the catalog's
+// completeness/health summary (see SoftwareSummaryHandler) so "how healthy
+// is this service" doesn't require a separate trip to the incidents list.
+func (r *PgIncidentRepository) GetIncidentStatsBySoftware(ctx context.Context, orgID, softwareID uuid.UUID) (total, open int, lastIncidentAt *time.Time, err error) {
+	err = r.pool.QueryRow(ctx,
+		`SELECT
+		   COUNT(*),
+		   COUNT(*) FILTER (WHERE status NOT IN ('resolved', 'closed')),
+		   MAX(created_at)
+		 FROM incidents WHERE org_id=$1 AND software_id=$2`,
+		orgID, softwareID,
+	).Scan(&total, &open, &lastIncidentAt)
+	return total, open, lastIncidentAt, err
 }
 
 // --- Alert Quarantine Repository ---

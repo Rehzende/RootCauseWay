@@ -75,6 +75,21 @@ export interface Person {
   slack?: string;
 }
 
+// Criticality: business-impact tier, drives default incident severity/
+// escalation priority. Type: what kind of catalog entry this actually is.
+export type SoftwareCriticality = 'critical' | 'high' | 'medium' | 'low';
+export type SoftwareType = 'service' | 'library' | 'database' | 'job' | 'website' | 'other';
+
+// DependencyRelation describes *why* one entry depends on another -- a hard
+// runtime dependency vs. something looser -- mirrors
+// backend/internal/services/software_service.go's DependencyRelation* consts.
+export type DependencyRelation = 'depends_on' | 'uses_api_of' | 'shares_database_with';
+
+export interface SoftwareDependency {
+  slug: string;
+  relation: DependencyRelation;
+}
+
 export interface SoftwareEntry {
   id: string;
   org_id: string;
@@ -93,7 +108,9 @@ export interface SoftwareEntry {
   architects?: Person[];
   runbook_url?: string;
   dashboard_url?: string;
-  dependencies?: string[];
+  dependencies?: SoftwareDependency[];
+  criticality: SoftwareCriticality;
+  type: SoftwareType;
   tags: string[];
   status: SoftwareStatus;
   created_at: string;
@@ -116,8 +133,25 @@ export interface CreateSoftwareRequest {
   architects?: Person[];
   runbook_url?: string;
   dashboard_url?: string;
-  dependencies?: string[];
+  dependencies?: SoftwareDependency[];
+  criticality?: SoftwareCriticality;
+  type?: SoftwareType;
   tags?: string[];
+}
+
+// Rolls up everything already tied to a software entry (SLOs, escalation
+// policies, incident history) plus a completeness score -- see
+// backend/internal/handlers/software_summary_handlers.go.
+export interface SoftwareSummary {
+  software_id: string;
+  completeness_score: number;
+  completeness_total: number;
+  missing_checks: string[];
+  slo_count: number;
+  escalation_policy_count: number;
+  total_incidents: number;
+  open_incidents: number;
+  last_incident_at?: string;
 }
 
 // --- Agent Registry ---
@@ -395,6 +429,8 @@ export interface SoftwareContext {
   architects?: any[];
   owner_id?: string;
   dependencies?: any[];
+  criticality?: SoftwareCriticality;
+  type?: SoftwareType;
 }
 
 export interface IncidentFull extends Incident {

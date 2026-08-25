@@ -6,6 +6,7 @@ import api, {
   getSoftware,
   updateSoftware,
   deleteSoftware,
+  getSoftwareSummary,
   listAgents,
   createAgent,
   getAgent,
@@ -89,6 +90,11 @@ describe('Software API', () => {
   it('deleteSoftware calls DELETE /software/:id', async () => {
     await deleteSoftware('abc');
     expect(api.delete).toHaveBeenCalledWith('/software/abc');
+  });
+
+  it('getSoftwareSummary calls GET /software/:id/summary', async () => {
+    await getSoftwareSummary('abc');
+    expect(api.get).toHaveBeenCalledWith('/software/abc/summary');
   });
 });
 

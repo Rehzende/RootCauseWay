@@ -6,6 +6,7 @@ import type {
   LoginResponse,
   SoftwareEntry,
   CreateSoftwareRequest,
+  SoftwareSummary,
   Agent,
   CreateAgentRequest,
   Webhook,
@@ -122,6 +123,9 @@ export const updateSoftware = (id: string, data: CreateSoftwareRequest) =>
 
 export const deleteSoftware = (id: string) =>
   api.delete(`/software/${id}`);
+
+export const getSoftwareSummary = (id: string) =>
+  api.get<SoftwareSummary>(`/software/${id}/summary`).then((r) => r.data);
 
 // --- Agents ---
 export const listAgents = (params?: { type?: string; page?: number; per_page?: number }) =>

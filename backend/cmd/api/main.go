@@ -10,10 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/Rehzende/RootCauseway/backend/internal/auth"
 	"github.com/Rehzende/RootCauseway/backend/internal/config"
 	"github.com/Rehzende/RootCauseway/backend/internal/crypto"
@@ -22,6 +18,10 @@ import (
 	"github.com/Rehzende/RootCauseway/backend/internal/middleware"
 	"github.com/Rehzende/RootCauseway/backend/internal/services"
 	"github.com/Rehzende/RootCauseway/backend/internal/ws"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -278,6 +278,13 @@ func main() {
 
 	sloh := handlers.NewSLOHandler(sloSvc)
 
+	swSummaryH := &handlers.SoftwareSummaryHandler{
+		Software:   softwareSvc,
+		SLO:        sloRepo,
+		Escalation: escalationPolicyRepo,
+		Incidents:  incidentRepo,
+	}
+
 	r := gin.New()
 	r.MaxMultipartMemory = 10 << 20 // 10MB
 
@@ -480,6 +487,7 @@ func main() {
 	protected.GET("/software/:id", h.GetSoftware)
 	protected.PUT("/software/:id", h.UpdateSoftware)
 	protected.DELETE("/software/:id", h.DeleteSoftware)
+	protected.GET("/software/:id/summary", swSummaryH.GetSoftwareSummary)
 
 	// Agents
 	protected.GET("/agents", h.ListAgents)
