@@ -78,3 +78,9 @@ becomes a real Prometheus alert (`RootCausewayAgentServiceSwallowedError`) inste
 of a log line nobody's watching.
 
 Frontend is a React SPA served via nginx with API reverse proxy.
+
+## Workflow
+
+When a feature or fix is done, open a PR documenting it (`gh pr create`) instead of
+pushing straight to `main` -- summarize what changed, why, and how it was verified
+(build/tests, live check) in the PR body.
