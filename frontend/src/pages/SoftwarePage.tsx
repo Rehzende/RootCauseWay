@@ -799,8 +799,25 @@ export function SoftwarePage() {
     setModalMode('edit');
   };
 
+  const modal = modalMode && (
+    <SoftwareModal
+      mode={modalMode}
+      form={form}
+      setForm={setForm}
+      onSubmit={() => (modalMode === 'create' ? createMut.mutate(form) : updateMut.mutate(form))}
+      onClose={() => { setModalMode(null); setEditingId(null); setForm(emptyForm()); }}
+      isPending={createMut.isPending || updateMut.isPending}
+      allSoftware={allSoftwareData?.data ?? []}
+    />
+  );
+
   if (selectedSoftware) {
-    return <SoftwareDetail software={selectedSoftware} onBack={() => setSelectedSoftware(null)} onEdit={handleEdit} />;
+    return (
+      <>
+        <SoftwareDetail software={selectedSoftware} onBack={() => setSelectedSoftware(null)} onEdit={handleEdit} />
+        {modal}
+      </>
+    );
   }
 
   const columns: Column<SoftwareEntry>[] = [
@@ -871,17 +888,7 @@ export function SoftwarePage() {
         )}
       </div>
 
-      {modalMode && (
-        <SoftwareModal
-          mode={modalMode}
-          form={form}
-          setForm={setForm}
-          onSubmit={() => modalMode === 'create' ? createMut.mutate(form) : updateMut.mutate(form)}
-          onClose={() => { setModalMode(null); setEditingId(null); setForm(emptyForm()); }}
-          isPending={createMut.isPending || updateMut.isPending}
-          allSoftware={allSoftwareData?.data ?? []}
-        />
-      )}
+      {modal}
     </div>
   );
 }
