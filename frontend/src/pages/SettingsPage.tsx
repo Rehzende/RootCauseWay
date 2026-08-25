@@ -136,6 +136,7 @@ function CreateAPIKeyModal({ onCreated, onClose }: { onCreated: (key: APIKeyWith
   const [name, setName] = useState('');
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
+  const { addToast } = useToast();
 
   const { data: rolesData } = useQuery({ queryKey: ['roles'], queryFn: () => listRoles({ per_page: 100 }) });
   const roles: RoleWithPermissions[] = rolesData?.data ?? [];
@@ -143,6 +144,14 @@ function CreateAPIKeyModal({ onCreated, onClose }: { onCreated: (key: APIKeyWith
   const mutation = useMutation({
     mutationFn: () => createAPIKey({ name, role_id: selectedRoleId || undefined, scopes: ['read'], expires_at: expiresAt || undefined }),
     onSuccess: (key) => { onCreated(key); },
+    // Previously missing entirely -- a failed create just sat there with
+    // no feedback at all (the button re-enables, nothing else happens),
+    // which is exactly how the key_prefix VARCHAR(10) bug (see migration
+    // 035) went unnoticed: every attempt 500'd and looked like nothing
+    // had happened.
+    onError: (err: any) => {
+      addToast({ type: 'error', title: 'Failed to create API key', message: err?.response?.data?.error || err.message });
+    },
   });
 
   return (
