@@ -8,6 +8,7 @@ import {
   useRunRetentionSweep,
 } from '@/hooks/useRetention';
 import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonTable } from '@/components/Skeleton';
 import type { RetentionPolicy, RetentionResourceType, RetentionActionType, RetentionSweepSummary } from '@/types/api';
@@ -219,9 +220,8 @@ export function RetentionPage() {
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <PermissionGate resource="settings" action="write">
-                          <button onClick={() => { setEditingPolicy(p); setShowModal(true); }} className="text-sm text-blue-600 hover:text-blue-800">Edit</button>
-                        </PermissionGate>
+                        <PermissionButton resource="settings" action="write"
+                          onClick={() => { setEditingPolicy(p); setShowModal(true); }} className="text-sm text-blue-600 hover:text-blue-800">Edit</PermissionButton>
                         <PermissionGate resource="settings" action="write">
                           <button
                             onClick={() => { if (confirm('Delete this retention policy?')) deleteMut.mutate(p.id); }}

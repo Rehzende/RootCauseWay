@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Plus, Zap, Hand, X } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { listRunbooks, createRunbook, updateRunbook, deleteRunbook, listSoftware } from '@/services/api';
+import { PermissionGate } from '@/components/PermissionGate';
 import type { Runbook } from '@/types/api';
 
 export function RunbooksPage() {
@@ -64,12 +65,14 @@ export function RunbooksPage() {
           <h1 className="text-2xl font-bold text-gray-900">Runbooks</h1>
           <p className="mt-1 text-sm text-gray-500">Automated and manual response procedures</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" /> New Runbook
-        </button>
+        <PermissionGate resource="runbooks" action="write">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" /> New Runbook
+          </button>
+        </PermissionGate>
       </div>
 
       {isLoading ? (
@@ -128,15 +131,17 @@ export function RunbooksPage() {
                 </div>
 
                 <div className="mt-3 flex items-center justify-end opacity-0 transition group-hover:opacity-100">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm('Delete this runbook?')) deleteMut.mutate(rb.id);
-                    }}
-                    className="text-xs text-red-500 hover:text-red-700"
-                  >
-                    Delete
-                  </button>
+                  <PermissionGate resource="runbooks" action="write">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Delete this runbook?')) deleteMut.mutate(rb.id);
+                      }}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      Delete
+                    </button>
+                  </PermissionGate>
                 </div>
               </div>
             );

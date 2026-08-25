@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, Plus, X, Hash, MessageSquare, AlertCircle, Mail, Globe, Link as LinkIcon } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { PermissionGate } from '@/components/PermissionGate';
 import {
   listNotificationChannels, createNotificationChannel, updateNotificationChannel, deleteNotificationChannel,
   listEscalationPolicies, createEscalationPolicy, deleteEscalationPolicy,
@@ -71,10 +72,12 @@ function ChannelsTab() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-gray-500">Manage notification delivery channels</p>
-        <button onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> Add Channel
-        </button>
+        <PermissionGate resource="notifications" action="write">
+          <button onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Add Channel
+          </button>
+        </PermissionGate>
       </div>
 
       {isLoading ? (
@@ -113,8 +116,10 @@ function ChannelsTab() {
                   </button>
                 </div>
                 <div className="mt-3 flex justify-end">
-                  <button onClick={() => { if (confirm('Delete channel?')) deleteMut.mutate(ch.id); }}
-                    className="text-xs text-red-500 hover:text-red-700">Delete</button>
+                  <PermissionGate resource="notifications" action="write">
+                    <button onClick={() => { if (confirm('Delete channel?')) deleteMut.mutate(ch.id); }}
+                      className="text-xs text-red-500 hover:text-red-700">Delete</button>
+                  </PermissionGate>
                 </div>
               </div>
             );
@@ -219,10 +224,12 @@ function PoliciesTab() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-gray-500">Define escalation workflows</p>
-        <button onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> New Policy
-        </button>
+        <PermissionGate resource="notifications" action="write">
+          <button onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> New Policy
+          </button>
+        </PermissionGate>
       </div>
 
       {isLoading ? (
@@ -270,8 +277,10 @@ function PoliciesTab() {
                       }`}>{p.enabled ? 'Active' : 'Inactive'}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => { if (confirm('Delete policy?')) deleteMut.mutate(p.id); }}
-                        className="text-xs text-red-500 hover:text-red-700">Delete</button>
+                      <PermissionGate resource="notifications" action="write">
+                        <button onClick={() => { if (confirm('Delete policy?')) deleteMut.mutate(p.id); }}
+                          className="text-xs text-red-500 hover:text-red-700">Delete</button>
+                      </PermissionGate>
                     </td>
                   </tr>
                 );

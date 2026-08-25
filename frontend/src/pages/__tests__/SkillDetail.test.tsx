@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '@/components/Toast';
+import { AuthProvider } from '@/hooks/useAuth';
 import { SkillDetail } from '@/pages/SkillsPage';
 import * as apiModule from '@/services/api';
 import type { Skill } from '@/types/api';
@@ -38,9 +39,11 @@ function renderDetail(skill: Skill) {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
-        <ToastProvider>
-          <SkillDetail skill={skill} onBack={() => {}} />
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <SkillDetail skill={skill} onBack={() => {}} />
+          </ToastProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -49,6 +52,11 @@ function renderDetail(skill: Skill) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockListA2AAgents.mockResolvedValue({ data: [], total: 0, page: 1, per_page: 20 });
+  // Edit/toggle are gated behind skills:write -- seed an admin user so
+  // AuthProvider's hasPermission() allows these actions, same as a real
+  // logged-in admin would see.
+  localStorage.setItem('rootcauseway_token', 'test-token');
+  localStorage.setItem('rootcauseway_user', JSON.stringify({ id: 'u-1', name: 'Test Admin', email: 'admin@test.com', role: 'admin' }));
 });
 
 describe('SkillDetail', () => {

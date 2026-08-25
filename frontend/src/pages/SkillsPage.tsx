@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, X, ArrowLeft, Puzzle, Link2, Pencil } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import {
   listSkills, createSkill, deleteSkill, updateSkill, getSkill,
   listA2AAgents, linkSkillToAgent, unlinkSkillFromAgent, listAgentSkills,
@@ -77,7 +79,9 @@ function SkillCard({ skill, onDelete, onClick }: { skill: Skill; onDelete: () =>
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${skill.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
             {skill.enabled ? 'Enabled' : 'Disabled'}
           </span>
-          <button onClick={onDelete} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+          <PermissionGate resource="skills" action="write">
+            <button onClick={onDelete} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -254,14 +258,15 @@ function LinkAgentsModal({ skill, onClose }: { skill: Skill; onClose: () => void
                 <p className="text-sm font-medium text-gray-900">{agent.name}</p>
                 <p className="text-xs text-gray-500">{agent.agent_type}</p>
               </div>
-              <button
+              <PermissionButton
+                resource="skills" action="write"
                 onClick={() => linked ? unlinkMut.mutate({ agentId: agent.id }) : linkMut.mutate({ agentId: agent.id })}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium ${
                   linked ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                 }`}
               >
                 {linked ? 'Unlink' : 'Link'}
-              </button>
+              </PermissionButton>
             </div>
           ))}
           {(linkedSkills ?? []).length === 0 && <p className="text-sm text-gray-500">No agents available</p>}
@@ -318,10 +323,10 @@ export function SkillDetail({ skill, onBack }: { skill: Skill; onBack: () => voi
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${skill.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
           {skill.enabled ? 'Enabled' : 'Disabled'}
         </span>
-        <button onClick={() => setShowEditModal(true)}
+        <PermissionButton resource="skills" action="write" onClick={() => setShowEditModal(true)}
           className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
           <Pencil className="h-3 w-3" /> Edit
-        </button>
+        </PermissionButton>
         <button onClick={() => toggleMut.mutate()} disabled={toggleMut.isPending}
           className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
           {skill.enabled ? 'Disable' : 'Enable'}
@@ -453,12 +458,14 @@ export function SkillsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Skills Registry</h1>
           <p className="mt-1 text-sm text-gray-500">Manage reusable skills that can be linked to agents</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" /> Create Skill
-        </button>
+        <PermissionGate resource="skills" action="write">
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" /> Create Skill
+          </button>
+        </PermissionGate>
       </div>
 
       <div className="mt-6">
@@ -468,10 +475,12 @@ export function SkillsPage() {
           <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center">
             <Puzzle className="mx-auto h-12 w-12 text-gray-300" />
             <p className="mt-3 text-sm text-gray-500">No skills registered yet</p>
-            <button onClick={() => setShowModal(true)}
-              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">
-              <Plus className="h-4 w-4" /> Create your first skill
-            </button>
+            <PermissionGate resource="skills" action="write">
+              <button onClick={() => setShowModal(true)}
+                className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">
+                <Plus className="h-4 w-4" /> Create your first skill
+              </button>
+            </PermissionGate>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

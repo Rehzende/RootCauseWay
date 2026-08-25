@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pencil, Check } from 'lucide-react';
 import type { IncidentRCA, AnalysisStatus } from '@/types/api';
+import { PermissionButton } from '@/components/PermissionButton';
 import { ConfidenceMeter } from './ConfidenceMeter';
 import { FiveWhys } from './FiveWhys';
 
@@ -42,12 +43,13 @@ export function RCAPanel({ rca, onUpdate }: RCAPanelProps) {
             {rca.status.replace('_', ' ')}
           </span>
           {onUpdate && (
-            <button
+            <PermissionButton
+              resource="incidents" action="write"
               onClick={() => editing ? save() : setEditing(true)}
               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             >
               {editing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-            </button>
+            </PermissionButton>
           )}
         </div>
       </div>

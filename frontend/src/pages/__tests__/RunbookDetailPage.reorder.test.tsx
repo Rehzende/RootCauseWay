@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '@/components/Toast';
+import { AuthProvider } from '@/hooks/useAuth';
 import { RunbookDetailPage } from '@/pages/RunbookDetailPage';
 import * as apiModule from '@/services/api';
 import type { Runbook, RunbookStep } from '@/types/api';
@@ -47,11 +48,13 @@ function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/runbooks/rb-1']}>
       <QueryClientProvider client={queryClient}>
-        <ToastProvider>
-          <Routes>
-            <Route path="/runbooks/:id" element={<RunbookDetailPage />} />
-          </Routes>
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/runbooks/:id" element={<RunbookDetailPage />} />
+            </Routes>
+          </ToastProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );

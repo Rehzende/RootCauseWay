@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, X, Shield, Clock, KeyRound } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { PermissionGate } from '@/components/PermissionGate';
 import {
   listCredentialProviders, createCredentialProvider, deleteCredentialProvider,
   listAccessPolicies, createAccessPolicy, deleteAccessPolicy,
@@ -251,10 +252,12 @@ function ProvidersTab() {
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <button onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> Add Provider
-        </button>
+        <PermissionGate resource="credentials" action="write">
+          <button onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Add Provider
+          </button>
+        </PermissionGate>
       </div>
 
       {isLoading ? <p className="text-sm text-gray-500">Loading...</p> : providers.length === 0 ? (
@@ -271,9 +274,11 @@ function ProvidersTab() {
                   <KeyRound className="h-4 w-4 text-gray-400" />
                   <h3 className="font-semibold text-gray-900">{provider.name}</h3>
                 </div>
-                <button onClick={() => deleteMut.mutate(provider.id)} className="text-red-400 hover:text-red-600">
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <PermissionGate resource="credentials" action="write">
+                  <button onClick={() => deleteMut.mutate(provider.id)} className="text-red-400 hover:text-red-600">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </PermissionGate>
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${providerBadge[provider.provider_type]}`}>
@@ -319,10 +324,12 @@ function PoliciesTab() {
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <button onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> Create Policy
-        </button>
+        <PermissionGate resource="credentials" action="write">
+          <button onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Create Policy
+          </button>
+        </PermissionGate>
       </div>
 
       {isLoading ? <p className="text-sm text-gray-500">Loading...</p> : policies.length === 0 ? (
@@ -367,9 +374,11 @@ function PoliciesTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button onClick={() => deleteMut.mutate(policy.id)} className="text-red-400 hover:text-red-600">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <PermissionGate resource="credentials" action="write">
+                      <button onClick={() => deleteMut.mutate(policy.id)} className="text-red-400 hover:text-red-600">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </PermissionGate>
                   </td>
                 </tr>
               ))}
@@ -449,8 +458,10 @@ function LeasesTab() {
                             className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 hover:bg-gray-200">Cancel</button>
                         </div>
                       ) : (
-                        <button onClick={() => setRevoking(lease.id)}
-                          className="rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100">Revoke</button>
+                        <PermissionGate resource="credentials" action="write">
+                          <button onClick={() => setRevoking(lease.id)}
+                            className="rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100">Revoke</button>
+                        </PermissionGate>
                       )
                     )}
                   </td>

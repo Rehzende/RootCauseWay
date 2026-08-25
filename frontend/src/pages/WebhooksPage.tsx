@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Copy, Check } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { PermissionGate } from '@/components/PermissionGate';
 import { listWebhooks, createWebhook, deleteWebhook, listSoftware } from '@/services/api';
 import { DataTable, type Column } from '@/components/DataTable';
 import type { Webhook, CreateWebhookRequest, WebhookSource } from '@/types/api';
@@ -75,9 +76,11 @@ export function WebhooksPage() {
       );
     }},
     { key: 'actions', header: '', render: (w) => (
-      <button onClick={(e) => { e.stopPropagation(); deleteMut.mutate(w.id); }} className="text-red-400 hover:text-red-600">
-        <Trash2 className="h-4 w-4" />
-      </button>
+      <PermissionGate resource="webhooks" action="write">
+        <button onClick={(e) => { e.stopPropagation(); deleteMut.mutate(w.id); }} className="text-red-400 hover:text-red-600">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </PermissionGate>
     )},
   ];
 
@@ -88,12 +91,14 @@ export function WebhooksPage() {
           <h1 className="text-2xl font-bold text-gray-900">Webhooks</h1>
           <p className="mt-1 text-sm text-gray-500">Manage alert ingestion endpoints</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" /> Add Webhook
-        </button>
+        <PermissionGate resource="webhooks" action="write">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" /> Add Webhook
+          </button>
+        </PermissionGate>
       </div>
 
       {showForm && (

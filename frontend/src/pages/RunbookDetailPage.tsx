@@ -6,6 +6,7 @@ import {
   CheckCircle2, XCircle, Clock, Loader2, Circle,
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { PermissionGate } from '@/components/PermissionGate';
 import {
   getRunbook, listRunbookSteps, createRunbookStep, deleteRunbookStep, reorderRunbookSteps,
   executeRunbook, listRunbookExecutions, getRunbookExecution, completeExecutionStep,
@@ -80,12 +81,14 @@ function StepPipeline({ steps, onDelete, onMove }: {
                   >
                     <ChevronDown className="h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() => onDelete(step.id)}
-                    className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <PermissionGate resource="runbooks" action="write">
+                    <button
+                      onClick={() => onDelete(step.id)}
+                      className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </PermissionGate>
                 </div>
               </div>
               {step.description && (
@@ -175,12 +178,14 @@ function ExecutionView({ execution, onCompleteStep }: { execution: RunbookExecut
                     }`}>{sr.status.replace(/_/g, ' ')}</span>
                   </div>
                   {isActionable && (
-                    <button
-                      onClick={() => onCompleteStep(sr.step_id)}
-                      className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
-                    >
-                      Mark Complete
-                    </button>
+                    <PermissionGate resource="runbooks" action="execute">
+                      <button
+                        onClick={() => onCompleteStep(sr.step_id)}
+                        className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
+                      >
+                        Mark Complete
+                      </button>
+                    </PermissionGate>
                   )}
                 </div>
                 {sr.completed_at && sr.started_at && (
@@ -312,13 +317,15 @@ export function RunbookDetailPage() {
             {runbook.auto_trigger && <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">Auto-trigger</span>}
           </div>
         </div>
-        <button
-          onClick={() => executeMut.mutate()}
-          disabled={executeMut.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-        >
-          <Play className="h-4 w-4" /> Execute
-        </button>
+        <PermissionGate resource="runbooks" action="execute">
+          <button
+            onClick={() => executeMut.mutate()}
+            disabled={executeMut.isPending}
+            className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          >
+            <Play className="h-4 w-4" /> Execute
+          </button>
+        </PermissionGate>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -327,12 +334,14 @@ export function RunbookDetailPage() {
           <div className="rounded-lg border border-gray-200 bg-white p-6">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-900">Steps ({sortedSteps.length})</h3>
-              <button
-                onClick={() => setShowAddStep(true)}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Step
-              </button>
+              <PermissionGate resource="runbooks" action="write">
+                <button
+                  onClick={() => setShowAddStep(true)}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Step
+                </button>
+              </PermissionGate>
             </div>
 
             <StepPipeline

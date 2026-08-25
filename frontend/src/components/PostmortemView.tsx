@@ -3,6 +3,7 @@ import { Pencil, Check, CheckCircle, Circle, Download, ChevronDown } from 'lucid
 import { useToast } from '@/components/Toast';
 import { exportPostmortem } from '@/services/api';
 import type { IncidentPostmortem, PostmortemStatus } from '@/types/api';
+import { PermissionButton } from '@/components/PermissionButton';
 
 interface PostmortemViewProps {
   postmortem: IncidentPostmortem | null;
@@ -93,7 +94,8 @@ function EditableSection({ title, content, onSave, bg = 'bg-gray-50' }: SectionP
       <div className="mb-1 flex items-center justify-between">
         <h4 className="text-sm font-semibold text-gray-900">{title}</h4>
         {onSave && (
-          <button
+          <PermissionButton
+            resource="incidents" action="write"
             onClick={() => {
               if (editing) { onSave(value); setEditing(false); }
               else setEditing(true);
@@ -101,7 +103,7 @@ function EditableSection({ title, content, onSave, bg = 'bg-gray-50' }: SectionP
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
             {editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-          </button>
+          </PermissionButton>
         )}
       </div>
       {editing ? (
@@ -165,12 +167,13 @@ export function PostmortemView({ postmortem, onUpdate, incidentId }: PostmortemV
         <div className="flex items-center gap-2">
           {incidentId && <ExportButton incidentId={incidentId} />}
           {onUpdate && currentIdx < statusFlow.length - 1 && (
-            <button
+            <PermissionButton
+              resource="incidents" action="write"
               onClick={() => onUpdate({ status: statusFlow[currentIdx + 1] })}
               className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
             >
               {currentIdx === 0 ? 'Submit for Review' : 'Publish'}
-            </button>
+            </PermissionButton>
           )}
         </div>
       </div>

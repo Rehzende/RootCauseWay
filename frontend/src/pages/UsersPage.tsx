@@ -271,7 +271,7 @@ export function UsersPage() {
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <PermissionGate resource="users" action="delete">
+                    <PermissionGate resource="users" action="write">
                       <button onClick={() => { if (confirm('Delete this user?')) deleteMutation.mutate(u.id); }} className="text-gray-400 hover:text-red-600">
                         <Trash2 className="h-4 w-4" />
                       </button>

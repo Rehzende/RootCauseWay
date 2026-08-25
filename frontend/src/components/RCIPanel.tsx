@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Shield, Users, Clock, Server, Pencil, Check } from 'lucide-react';
 import type { IncidentRCI, AnalysisStatus } from '@/types/api';
+import { PermissionButton } from '@/components/PermissionButton';
 
 interface RCIPanelProps {
   rci: IncidentRCI | null;
@@ -41,12 +42,13 @@ export function RCIPanel({ rci, onUpdate }: RCIPanelProps) {
             {rci.status.replace('_', ' ')}
           </span>
           {onUpdate && (
-            <button
+            <PermissionButton
+              resource="incidents" action="write"
               onClick={() => editing ? save() : setEditing(true)}
               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             >
               {editing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-            </button>
+            </PermissionButton>
           )}
         </div>
       </div>

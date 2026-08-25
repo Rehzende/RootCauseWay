@@ -6,6 +6,7 @@ import {
   createSnapshotConfig, updateSnapshotConfig, deleteSnapshotConfig, listSoftware,
 } from '@/services/api';
 import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import { X, Plus, Trash2, RefreshCw, ChevronLeft, Power } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import type { ObservabilitySource, ObservabilitySourceType, ObservabilityAuthType, SnapshotConfig, SoftwareEntry } from '@/types/api';
@@ -451,10 +452,12 @@ function SourceDetailView({ source, onBack }: { source: ObservabilitySource; onB
       <div className="mt-6">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">Snapshot Configs</h3>
-          <button onClick={() => { setEditSnapshot(undefined); setShowSnapshotModal(true); }}
-            className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
-            <Plus className="h-4 w-4" /> Add Config
-          </button>
+          <PermissionGate resource="observability" action="write">
+            <button onClick={() => { setEditSnapshot(undefined); setShowSnapshotModal(true); }}
+              className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+              <Plus className="h-4 w-4" /> Add Config
+            </button>
+          </PermissionGate>
         </div>
         <div className="mt-3 space-y-3">
           {(snapshots ?? []).length === 0 && <p className="text-sm text-gray-400">No snapshot configs yet</p>}
@@ -472,9 +475,13 @@ function SourceDetailView({ source, onBack }: { source: ObservabilitySource; onB
                   <p className="mt-1 text-xs text-gray-500">Time range: {cfg.time_range_seconds}s</p>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { setEditSnapshot(cfg); setShowSnapshotModal(true); }} className="text-sm text-blue-600 hover:text-blue-800">Edit</button>
-                  <button onClick={() => { if (confirm('Delete this snapshot config?')) deleteSnapMut.mutate(cfg.id); }}
-                    className="text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                  <PermissionButton resource="observability" action="write"
+                    onClick={() => { setEditSnapshot(cfg); setShowSnapshotModal(true); }}
+                    className="text-sm text-blue-600 hover:text-blue-800">Edit</PermissionButton>
+                  <PermissionGate resource="observability" action="write">
+                    <button onClick={() => { if (confirm('Delete this snapshot config?')) deleteSnapMut.mutate(cfg.id); }}
+                      className="text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                  </PermissionGate>
                 </div>
               </div>
               {cfg.query_template && (
@@ -544,7 +551,7 @@ export function DataSourcesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Data Sources</h1>
           <p className="mt-1 text-sm text-gray-500">Connect observability platforms to collect metrics, logs, and traces</p>
         </div>
-        <PermissionGate resource="settings" action="write">
+        <PermissionGate resource="observability" action="write">
           <button onClick={() => { setEditSource(undefined); setShowModal(true); }}
             className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
             <Plus className="h-4 w-4" /> Add Data Source
@@ -611,8 +618,10 @@ export function DataSourcesPage() {
                         </div>
                       </div>
                       <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => { setEditSource(s); setShowModal(true); }} className="text-xs text-blue-600 hover:text-blue-800">Edit</button>
-                        <PermissionGate resource="settings" action="delete">
+                        <PermissionButton resource="observability" action="write"
+                          onClick={() => { setEditSource(s); setShowModal(true); }}
+                          className="text-xs text-blue-600 hover:text-blue-800">Edit</PermissionButton>
+                        <PermissionGate resource="observability" action="write">
                           <button onClick={() => { if (confirm('Delete this data source?')) deleteMut.mutate(s.id); }}
                             className="text-gray-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </PermissionGate>

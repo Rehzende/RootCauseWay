@@ -275,7 +275,7 @@ export function RolesPage() {
                 <div className="flex items-center gap-1">
                   {role.is_system && <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">system</span>}
                   {!role.is_system && (
-                    <PermissionGate resource="roles" action="delete">
+                    <PermissionGate resource="roles" action="write">
                       <button onClick={(e) => { e.stopPropagation(); if (confirm('Delete this role?')) deleteMut.mutate(role.id); }} className="text-gray-400 hover:text-red-600">
                         <Trash2 className="h-4 w-4" />
                       </button>

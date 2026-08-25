@@ -10,6 +10,7 @@ import {
   useDeleteSLODefinition,
 } from '@/hooks/useSLO';
 import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import { SLOStatusBadge } from '@/components/SLOStatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonTable } from '@/components/Skeleton';
@@ -182,10 +183,8 @@ function SLORow({
       </td>
       <td className="whitespace-nowrap px-6 py-4 text-right">
         <div className="flex items-center justify-end gap-2">
-          <PermissionGate resource="software" action="write">
-            <button onClick={onEdit} className="text-sm text-blue-600 hover:text-blue-800">Edit</button>
-          </PermissionGate>
-          <PermissionGate resource="software" action="write">
+          <PermissionButton resource="slo" action="write" onClick={onEdit} className="text-sm text-blue-600 hover:text-blue-800">Edit</PermissionButton>
+          <PermissionGate resource="slo" action="write">
             <button
               onClick={() => { if (confirm('Delete this SLO definition?')) deleteMut.mutate(slo.id); }}
               className="text-gray-400 hover:text-red-600"
@@ -220,7 +219,7 @@ export function SLODashboardPage() {
             Service Level Objectives and error-budget tracking per software entry
           </p>
         </div>
-        <PermissionGate resource="software" action="write">
+        <PermissionGate resource="slo" action="write">
           <button
             onClick={() => { setEditingSLO(undefined); setShowModal(true); }}
             className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"

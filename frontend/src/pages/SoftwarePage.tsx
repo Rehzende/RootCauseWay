@@ -5,6 +5,8 @@ import {
   Users, BarChart3, Link2, Tag, Server, ArrowLeft, KeyRound, ShieldCheck, Activity, Pencil,
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import {
   listSoftware, createSoftware, updateSoftware, deleteSoftware, getSoftwareSummary,
   listResourceCredentials, createResourceCredential, deleteResourceCredential,
@@ -493,10 +495,12 @@ function ResourceCredentialsSection({ softwareId }: { softwareId: string }) {
         <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
           <KeyRound className="h-4 w-4 text-gray-400" /> Resource Credentials
         </h3>
-        <button onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
-          <Plus className="h-3 w-3" /> Add Credential
-        </button>
+        <PermissionGate resource="credentials" action="write">
+          <button onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
+            <Plus className="h-3 w-3" /> Add Credential
+          </button>
+        </PermissionGate>
       </div>
       {(credentials ?? []).length > 0 ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -509,9 +513,11 @@ function ResourceCredentialsSection({ softwareId }: { softwareId: string }) {
                     {cred.resource_type.replace(/_/g, ' ')}
                   </span>
                 </div>
-                <button onClick={() => deleteMut.mutate(cred.id)} className="text-red-400 hover:text-red-600">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <PermissionGate resource="credentials" action="write">
+                  <button onClick={() => deleteMut.mutate(cred.id)} className="text-red-400 hover:text-red-600">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </PermissionGate>
               </div>
               <div className="mt-2 space-y-1 text-xs text-gray-500">
                 <p>Provider: <span className="font-medium text-gray-700">{providerName(cred.provider_id)}</span></p>
@@ -621,10 +627,10 @@ function SoftwareDetail({ software, onBack, onEdit }: { software: SoftwareEntry;
             </span>
           )}
         </div>
-        <button onClick={() => onEdit(software)}
+        <PermissionButton resource="software" action="write" onClick={() => onEdit(software)}
           className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
           <Pencil className="h-4 w-4" /> Edit
-        </button>
+        </PermissionButton>
       </div>
       {software.description && <p className="mt-2 text-sm text-gray-600">{software.description}</p>}
 
@@ -848,10 +854,13 @@ export function SoftwarePage() {
     )},
     { key: 'actions', header: '', render: (s) => (
       <div className="flex items-center gap-2">
-        <button onClick={(e) => { e.stopPropagation(); handleEdit(s); }} className="text-gray-400 hover:text-blue-600 text-xs">Edit</button>
-        <button onClick={(e) => { e.stopPropagation(); deleteMut.mutate(s.id); }} className="text-red-400 hover:text-red-600">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <PermissionButton resource="software" action="write"
+          onClick={(e) => { e.stopPropagation(); handleEdit(s); }} className="text-gray-400 hover:text-blue-600 text-xs">Edit</PermissionButton>
+        <PermissionGate resource="software" action="write">
+          <button onClick={(e) => { e.stopPropagation(); deleteMut.mutate(s.id); }} className="text-red-400 hover:text-red-600">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </PermissionGate>
       </div>
     )},
   ];
@@ -863,12 +872,14 @@ export function SoftwarePage() {
           <h1 className="text-2xl font-bold text-gray-900">Software Catalog</h1>
           <p className="mt-1 text-sm text-gray-500">Manage your registered software entries with infrastructure and team details</p>
         </div>
-        <button
-          onClick={() => { setForm(emptyForm()); setModalMode('create'); }}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" /> Add Software
-        </button>
+        <PermissionGate resource="software" action="write">
+          <button
+            onClick={() => { setForm(emptyForm()); setModalMode('create'); }}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" /> Add Software
+          </button>
+        </PermissionGate>
       </div>
 
       <div className="mt-6">

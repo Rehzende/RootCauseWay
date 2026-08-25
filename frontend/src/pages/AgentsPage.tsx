@@ -9,6 +9,8 @@ import {
   healthCheckA2AAgent, healthCheckAllA2AAgents,
 } from '@/services/api';
 import { useToast } from '@/components/Toast';
+import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import type {
   A2AAgent, CreateA2AAgentRequest, A2AAgentType, A2AAuthType, AgentHostingType, LLMProvider,
   AgentSkill, A2AHealthStatus, Skill, AgentSkillLink,
@@ -72,7 +74,11 @@ function AgentCard({
               <div className="peer h-5 w-9 rounded-full bg-gray-300 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-blue-600 peer-checked:after:translate-x-full" />
             </label>
           )}
-          {!agent.is_system && <button onClick={onDelete} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
+          {!agent.is_system && (
+            <PermissionGate resource="agents" action="write">
+              <button onClick={onDelete} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+            </PermissionGate>
+          )}
         </div>
       </div>
 
@@ -416,13 +422,15 @@ function AgentDetail({ agent, onBack }: { agent: A2AAgent; onBack: () => void })
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
                 />
               </div>
-              <button
-                type="submit"
-                disabled={overrideMut.isPending}
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {overrideMut.isPending ? 'Saving...' : 'Save override'}
-              </button>
+              <PermissionGate resource="agents" action="write">
+                <button
+                  type="submit"
+                  disabled={overrideMut.isPending}
+                  className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {overrideMut.isPending ? 'Saving...' : 'Save override'}
+                </button>
+              </PermissionGate>
             </form>
           </div>
         )}
@@ -478,14 +486,15 @@ function ManageSkillsModal({ agent, onClose }: { agent: A2AAgent; onClose: () =>
                   <p className="text-xs text-gray-500">{skill.category}</p>
                 </div>
               </div>
-              <button
+              <PermissionButton
+                resource="skills" action="write"
                 onClick={() => linkedIds.has(skill.id) ? unlinkMut.mutate(skill.id) : linkMut.mutate(skill.id)}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium ${
                   linkedIds.has(skill.id) ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                 }`}
               >
                 {linkedIds.has(skill.id) ? 'Unlink' : 'Link'}
-              </button>
+              </PermissionButton>
             </div>
           ))}
         </div>
@@ -564,12 +573,14 @@ export function AgentsPage() {
           >
             <RefreshCw className={`h-4 w-4 ${healthCheckAllMut.isPending ? 'animate-spin' : ''}`} /> Check All
           </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" /> Add Agent
-          </button>
+          <PermissionGate resource="agents" action="write">
+            <button
+              onClick={() => setShowModal(true)}
+              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" /> Add Agent
+            </button>
+          </PermissionGate>
         </div>
       </div>
 

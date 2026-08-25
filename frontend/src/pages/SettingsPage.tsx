@@ -7,6 +7,7 @@ import {
   getOrganizationSettings, updateOrganizationSettings, initiateTeamsOAuth, disconnectTeamsOAuth,
 } from '@/services/api';
 import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import { useToast } from '@/components/Toast';
 import { X, Plus, Copy, Trash2, Check } from 'lucide-react';
 import type { SSOProvider, APIKeyWithSecret, CreateSSOProviderRequest, RoleWithPermissions } from '@/types/api';
@@ -467,9 +468,8 @@ export function SettingsPage() {
                       />
                       Enabled
                     </label>
-                    <PermissionGate resource="settings" action="write">
-                      <button onClick={() => { setEditSSO(p); setShowSSOModal(true); }} className="text-sm text-blue-600 hover:text-blue-800">Edit</button>
-                    </PermissionGate>
+                    <PermissionButton resource="settings" action="write"
+                      onClick={() => { setEditSSO(p); setShowSSOModal(true); }} className="text-sm text-blue-600 hover:text-blue-800">Edit</PermissionButton>
                     <PermissionGate resource="settings" action="write">
                       <button onClick={() => { if (confirm('Delete this SSO provider?')) deleteSSOProviderMut.mutate(p.id); }} className="text-gray-400 hover:text-red-600">
                         <Trash2 className="h-4 w-4" />
@@ -519,7 +519,7 @@ export function SettingsPage() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-6 py-4 text-right">
-                        <PermissionGate resource="settings" action="delete">
+                        <PermissionGate resource="users" action="write">
                           <button onClick={() => { if (confirm('Revoke this API key?')) deleteAPIKeyMut.mutate(key.id); }} className="text-sm text-red-600 hover:text-red-800">Revoke</button>
                         </PermissionGate>
                       </td>
