@@ -182,7 +182,7 @@ function CreateAPIKeyModal({ onCreated, onClose }: { onCreated: (key: APIKeyWith
 }
 
 export function SettingsPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [tab, setTab] = useState<Tab>('general');
@@ -463,8 +463,9 @@ export function SettingsPage() {
                       <input
                         type="checkbox"
                         checked={p.enabled}
+                        disabled={!hasPermission('settings', 'write')}
                         onChange={() => toggleSSOEnabled.mutate(p)}
-                        className="rounded border-gray-300"
+                        className="rounded border-gray-300 disabled:cursor-not-allowed disabled:opacity-40"
                       />
                       Enabled
                     </label>

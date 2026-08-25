@@ -11,6 +11,7 @@ import {
 import { useToast } from '@/components/Toast';
 import { PermissionGate } from '@/components/PermissionGate';
 import { PermissionButton } from '@/components/PermissionButton';
+import { useAuth } from '@/hooks/useAuth';
 import type {
   A2AAgent, CreateA2AAgentRequest, A2AAgentType, A2AAuthType, AgentHostingType, LLMProvider,
   AgentSkill, A2AHealthStatus, Skill, AgentSkillLink,
@@ -50,6 +51,8 @@ function AgentCard({
   onClick: () => void;
   onHealthCheck: () => void;
 }) {
+  const { hasPermission } = useAuth();
+  const canWrite = hasPermission('agents', 'write');
   return (
     <div
       onClick={onClick}
@@ -69,8 +72,11 @@ function AgentCard({
         </div>
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {!agent.is_system && (
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input type="checkbox" checked={agent.enabled} onChange={onToggle} className="peer sr-only" />
+            <label
+              className={`relative inline-flex items-center ${canWrite ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
+              title={canWrite ? undefined : "You don't have permission to do this"}
+            >
+              <input type="checkbox" checked={agent.enabled} onChange={onToggle} disabled={!canWrite} className="peer sr-only" />
               <div className="peer h-5 w-9 rounded-full bg-gray-300 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-blue-600 peer-checked:after:translate-x-full" />
             </label>
           )}
@@ -114,12 +120,14 @@ function AgentCard({
         ) : (
           <span className="text-xs text-gray-400">No health check yet</span>
         )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onHealthCheck(); }}
-          className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-        >
-          <Heart className="h-3 w-3" /> Check
-        </button>
+        <PermissionGate resource="agents" action="write">
+          <button
+            onClick={(e) => { e.stopPropagation(); onHealthCheck(); }}
+            className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+          >
+            <Heart className="h-3 w-3" /> Check
+          </button>
+        </PermissionGate>
       </div>
     </div>
   );
@@ -566,13 +574,15 @@ export function AgentsPage() {
           <p className="mt-1 text-sm text-gray-500">Manage Agent-to-Agent protocol agents for incident analysis</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => healthCheckAllMut.mutate()}
-            disabled={healthCheckAllMut.isPending}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${healthCheckAllMut.isPending ? 'animate-spin' : ''}`} /> Check All
-          </button>
+          <PermissionGate resource="agents" action="write">
+            <button
+              onClick={() => healthCheckAllMut.mutate()}
+              disabled={healthCheckAllMut.isPending}
+              className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${healthCheckAllMut.isPending ? 'animate-spin' : ''}`} /> Check All
+            </button>
+          </PermissionGate>
           <PermissionGate resource="agents" action="write">
             <button
               onClick={() => setShowModal(true)}
@@ -591,10 +601,12 @@ export function AgentsPage() {
           <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center">
             <Bot className="mx-auto h-12 w-12 text-gray-300" />
             <p className="mt-3 text-sm text-gray-500">No A2A agents configured yet</p>
-            <button onClick={() => setShowModal(true)}
-              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">
-              <Plus className="h-4 w-4" /> Add your first agent
-            </button>
+            <PermissionGate resource="agents" action="write">
+              <button onClick={() => setShowModal(true)}
+                className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">
+                <Plus className="h-4 w-4" /> Add your first agent
+              </button>
+            </PermissionGate>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

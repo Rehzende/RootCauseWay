@@ -17,6 +17,7 @@ import {
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import type { PresenceUser } from '@/components/PresenceIndicator';
 import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import { SeverityBadge } from '@/components/SeverityBadge';
 import { StatusBadge } from '@/components/StatusBadge';
 import { IncidentTimeline } from '@/components/IncidentTimeline';
@@ -513,12 +514,13 @@ export function IncidentDetailPage() {
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
-              <button
+              <PermissionButton
+                resource="incidents" action="write"
                 onClick={() => setShowStatusMenu(!showStatusMenu)}
                 className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Change Status <ChevronDown className="h-4 w-4" />
-              </button>
+              </PermissionButton>
               {showStatusMenu && (
                 <div className="absolute right-0 z-10 mt-1 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
                   {statuses.map((s) => (
@@ -536,12 +538,13 @@ export function IncidentDetailPage() {
               )}
             </div>
             <div className="relative">
-              <button
+              <PermissionButton
+                resource="incidents" action="write"
                 onClick={() => setShowAssignMenu(!showAssignMenu)}
                 className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 <User className="h-4 w-4" /> {assignee ? assignee.name : 'Assign'} <ChevronDown className="h-4 w-4" />
-              </button>
+              </PermissionButton>
               {showAssignMenu && (
                 <div className="absolute right-0 z-10 mt-1 w-56 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
                   {incident.assignee_id && (
@@ -806,13 +809,14 @@ export function IncidentDetailPage() {
                     onChange={(e) => setComment(e.target.value)}
                     className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   />
-                  <button
+                  <PermissionButton
+                    resource="incidents" action="write"
                     type="submit"
                     disabled={addEventMut.isPending || !comment.trim()}
                     className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     Send
-                  </button>
+                  </PermissionButton>
                 </form>
               </div>
             </div>

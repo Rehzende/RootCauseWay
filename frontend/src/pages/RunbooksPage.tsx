@@ -5,6 +5,7 @@ import { BookOpen, Plus, Zap, Hand, X } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { listRunbooks, createRunbook, updateRunbook, deleteRunbook, listSoftware } from '@/services/api';
 import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import type { Runbook } from '@/types/api';
 
 export function RunbooksPage() {
@@ -101,7 +102,8 @@ export function RunbooksPage() {
                       <p className="mt-1 truncate text-xs text-gray-500">{rb.description}</p>
                     )}
                   </div>
-                  <button
+                  <PermissionButton
+                    resource="runbooks" action="write"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleMut.mutate({ id: rb.id, enabled: !rb.enabled });
@@ -111,7 +113,7 @@ export function RunbooksPage() {
                     }`}
                   >
                     {rb.enabled ? 'Enabled' : 'Disabled'}
-                  </button>
+                  </PermissionButton>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">

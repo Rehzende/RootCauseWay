@@ -327,10 +327,10 @@ export function SkillDetail({ skill, onBack }: { skill: Skill; onBack: () => voi
           className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
           <Pencil className="h-3 w-3" /> Edit
         </PermissionButton>
-        <button onClick={() => toggleMut.mutate()} disabled={toggleMut.isPending}
+        <PermissionButton resource="skills" action="write" onClick={() => toggleMut.mutate()} disabled={toggleMut.isPending}
           className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
           {skill.enabled ? 'Disable' : 'Enable'}
-        </button>
+        </PermissionButton>
       </div>
       {skill.description && <p className="mt-2 text-sm text-gray-600">{skill.description}</p>}
 

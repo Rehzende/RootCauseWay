@@ -1,4 +1,5 @@
 import { ShieldAlert } from 'lucide-react';
+import { PermissionButton } from '@/components/PermissionButton';
 
 interface ApprovalGateBannerProps {
   awaitingApprovalStage?: string | null;
@@ -25,13 +26,14 @@ export function ApprovalGateBanner({ awaitingApprovalStage, onApprove, isPending
           </p>
         </div>
       </div>
-      <button
+      <PermissionButton
+        resource="incidents" action="write"
         onClick={onApprove}
         disabled={isPending}
         className="shrink-0 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
       >
         {isPending ? 'Approving...' : 'Approve'}
-      </button>
+      </PermissionButton>
     </div>
   );
 }

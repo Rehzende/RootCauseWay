@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, Plus, X, Hash, MessageSquare, AlertCircle, Mail, Globe, Link as LinkIcon } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { PermissionGate } from '@/components/PermissionGate';
+import { PermissionButton } from '@/components/PermissionButton';
 import {
   listNotificationChannels, createNotificationChannel, updateNotificationChannel, deleteNotificationChannel,
   listEscalationPolicies, createEscalationPolicy, deleteEscalationPolicy,
@@ -106,14 +107,15 @@ function ChannelsTab() {
                       <span className="text-xs text-gray-500">{cfg.label}</span>
                     </div>
                   </div>
-                  <button
+                  <PermissionButton
+                    resource="notifications" action="write"
                     onClick={() => toggleMut.mutate({ id: ch.id, enabled: !ch.enabled })}
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       ch.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                     }`}
                   >
                     {ch.enabled ? 'Active' : 'Inactive'}
-                  </button>
+                  </PermissionButton>
                 </div>
                 <div className="mt-3 flex justify-end">
                   <PermissionGate resource="notifications" action="write">

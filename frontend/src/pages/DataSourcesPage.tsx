@@ -420,10 +420,10 @@ function SourceDetailView({ source, onBack }: { source: ObservabilitySource; onB
               {source.description && <p className="mt-1 text-sm text-gray-500">{source.description}</p>}
               <p className="mt-2 font-mono text-sm text-gray-600">{source.base_url}</p>
             </div>
-            <button onClick={() => healthMut.mutate()} disabled={healthMut.isPending}
+            <PermissionButton resource="observability" action="write" onClick={() => healthMut.mutate()} disabled={healthMut.isPending}
               className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
               <RefreshCw className={`h-4 w-4 ${healthMut.isPending ? 'animate-spin' : ''}`} /> Test Connection
-            </button>
+            </PermissionButton>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
@@ -590,14 +590,14 @@ export function DataSourcesPage() {
                             <h3 className="font-medium text-gray-900">{s.name}</h3>
                           </div>
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => toggleMut.mutate(s)} title={s.enabled ? 'Disable' : 'Enable'}
+                            <PermissionButton resource="observability" action="write" onClick={() => toggleMut.mutate(s)} title={s.enabled ? 'Disable' : 'Enable'}
                               className={`rounded p-1 ${s.enabled ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-50'}`}>
                               <Power className="h-4 w-4" />
-                            </button>
-                            <button onClick={() => healthMut.mutate(s.id)} title="Test Connection"
+                            </PermissionButton>
+                            <PermissionButton resource="observability" action="write" onClick={() => healthMut.mutate(s.id)} title="Test Connection"
                               className="rounded p-1 text-gray-400 hover:bg-gray-50 hover:text-blue-600">
                               <RefreshCw className={`h-4 w-4 ${healthMut.isPending ? 'animate-spin' : ''}`} />
-                            </button>
+                            </PermissionButton>
                           </div>
                         </div>
                         <p className="mt-1 truncate font-mono text-xs text-gray-500">{s.base_url}</p>
