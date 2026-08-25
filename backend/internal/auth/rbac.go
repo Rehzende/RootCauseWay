@@ -125,3 +125,25 @@ func (r *RBACEnforcer) RequirePermission(resource, action string) gin.HandlerFun
 		c.AbortWithStatusJSON(http.StatusForbidden, models.ErrorResponse{Error: "insufficient permissions"})
 	}
 }
+
+// RequireResourcePermission returns Gin middleware that requires
+// <resource>:<action> where action is inferred from the HTTP method
+// (GET/HEAD -> read, everything else -> write) -- the convention nearly
+// every route in this app already follows, since the permission catalog
+// only defines a "delete" action for the "incidents" resource and an
+// "execute" action for "runbooks". Routes needing one of those two, or any
+// other non-default action, use RequirePermission directly instead (see
+// cmd/api/main.go's route registration for exactly which ones).
+func (r *RBACEnforcer) RequireResourcePermission(resource string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Computed fresh per-request, not captured once at registration
+		// time -- this handler is shared across every request through the
+		// route, so a var declared outside this closure would leak its
+		// value (e.g. "read" from a GET) into the next, unrelated request.
+		action := "write"
+		if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead {
+			action = "read"
+		}
+		r.RequirePermission(resource, action)(c)
+	}
+}

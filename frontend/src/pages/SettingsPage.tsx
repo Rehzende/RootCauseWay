@@ -434,7 +434,7 @@ export function SettingsPage() {
         {tab === 'sso' && (
           <div>
             <div className="mb-4 flex justify-end">
-              <PermissionGate resource="sso" action="write">
+              <PermissionGate resource="settings" action="write">
                 <button onClick={() => { setEditSSO(undefined); setShowSSOModal(true); }} className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
                   <Plus className="h-4 w-4" /> Add Provider
                 </button>
@@ -467,10 +467,10 @@ export function SettingsPage() {
                       />
                       Enabled
                     </label>
-                    <PermissionGate resource="sso" action="write">
+                    <PermissionGate resource="settings" action="write">
                       <button onClick={() => { setEditSSO(p); setShowSSOModal(true); }} className="text-sm text-blue-600 hover:text-blue-800">Edit</button>
                     </PermissionGate>
-                    <PermissionGate resource="sso" action="delete">
+                    <PermissionGate resource="settings" action="write">
                       <button onClick={() => { if (confirm('Delete this SSO provider?')) deleteSSOProviderMut.mutate(p.id); }} className="text-gray-400 hover:text-red-600">
                         <Trash2 className="h-4 w-4" />
                       </button>
