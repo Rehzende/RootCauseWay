@@ -233,11 +233,18 @@ func FormatIncidentCode(incidentNumber int64) string {
 
 // UpdateIncidentRequest is the request body for updating an incident.
 type UpdateIncidentRequest struct {
-	Status     *string    `json:"status,omitempty"`
-	Severity   *string    `json:"severity,omitempty"`
-	AssigneeID *uuid.UUID `json:"assignee_id,omitempty"`
-	RootCause  *string    `json:"root_cause,omitempty"`
-	Mitigation *string    `json:"mitigation,omitempty"`
+	Status   *string `json:"status,omitempty"`
+	Severity *string `json:"severity,omitempty"`
+	// AssigneeID is a *string, not *uuid.UUID: a nil pointer here means
+	// "field absent, don't touch assignment" (the normal partial-update
+	// case), but an unassign action needs a THIRD state -- "clear the
+	// assignee" -- and a JSON `null` unmarshals to the same nil pointer as
+	// an absent key, so it can't carry that on its own. An empty string
+	// ("") is unambiguously "please clear it" (never a valid UUID), parsed
+	// in IncidentService.Update.
+	AssigneeID *string `json:"assignee_id,omitempty"`
+	RootCause  *string `json:"root_cause,omitempty"`
+	Mitigation *string `json:"mitigation,omitempty"`
 }
 
 // IncidentEvent represents a timeline event within an incident.

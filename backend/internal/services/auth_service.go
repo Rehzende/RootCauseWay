@@ -282,8 +282,25 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*models.UserWi
 	return user, nil
 }
 
+// List returns the org's users with each one's Roles populated -- unlike
+// GetByID/Create, this used to be a bare passthrough to the repository
+// (which never joins user_roles at all), so every user on the Users page
+// always showed zero roles and every checkbox always rendered unchecked
+// regardless of real assignments underneath. AssignRole/UnassignRole
+// themselves worked correctly (confirmed against real data: the
+// user_roles row was there) -- nothing ever read it back for display.
 func (s *UserService) List(ctx context.Context, orgID uuid.UUID, page, perPage int) ([]models.UserWithRoles, int, error) {
-	return s.userRepo.List(ctx, orgID, page, perPage)
+	users, total, err := s.userRepo.List(ctx, orgID, page, perPage)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range users {
+		roles, err := s.userRoleRepo.ListByUser(ctx, users[i].ID)
+		if err == nil {
+			users[i].Roles = roles
+		}
+	}
+	return users, total, nil
 }
 
 func (s *UserService) Update(ctx context.Context, id uuid.UUID, u *models.UserWithRoles) (*models.UserWithRoles, error) {

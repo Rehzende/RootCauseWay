@@ -87,6 +87,12 @@ func (h *Handler) UpdateIncident(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
+	if req.AssigneeID != nil && *req.AssigneeID != "" {
+		if _, err := uuid.Parse(*req.AssigneeID); err != nil {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid assignee_id: " + err.Error()})
+			return
+		}
+	}
 	incident, justTerminalized, err := h.Incidents.Update(c.Request.Context(), id, req)
 	if err != nil {
 		handleDBError(c, err, "resource")

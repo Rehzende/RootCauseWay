@@ -12,7 +12,7 @@ import {
 import {
   getIncidentFull, updateIncident, addIncidentEvent, updateRCI, updateRCA, updatePostmortem,
   listA2ATasks, submitFeedback, listSimilarIncidents, listChangeEvents, listAlertGroups,
-  approveIncidentStage,
+  approveIncidentStage, listUsers,
 } from '@/services/api';
 import { PresenceIndicator } from '@/components/PresenceIndicator';
 import type { PresenceUser } from '@/components/PresenceIndicator';
@@ -349,6 +349,7 @@ export function IncidentDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [comment, setComment] = useState('');
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showAssignMenu, setShowAssignMenu] = useState(false);
   const [pulseSection, setPulseSection] = useState<string | null>(null);
 
   const wsTopics = useMemo(() => (id ? [`incident:${id}`] : []), [id]);
@@ -388,6 +389,13 @@ export function IncidentDetailPage() {
     queryFn: () => listA2ATasks(id!),
     enabled: !!id,
   });
+
+  const { data: usersData } = useQuery({
+    queryKey: ['users', 'for-assign'],
+    queryFn: () => listUsers({ per_page: 100 }),
+  });
+  const assignableUsers = usersData?.data ?? [];
+  const assignee = assignableUsers.find((u) => u.id === incident?.assignee_id);
 
   const updateMut = useMutation({
     mutationFn: (data: Parameters<typeof updateIncident>[1]) => updateIncident(id!, data),
@@ -480,7 +488,7 @@ export function IncidentDetailPage() {
               </span>
               {incident.assignee_id && (
                 <span className="inline-flex items-center gap-1">
-                  <User className="h-3.5 w-3.5" /> Assigned
+                  <User className="h-3.5 w-3.5" /> Assigned to {assignee?.name ?? 'someone no longer in this org'}
                 </span>
               )}
             </div>
@@ -514,9 +522,40 @@ export function IncidentDetailPage() {
                 </div>
               )}
             </div>
-            <button className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-              <User className="mr-1.5 inline h-4 w-4" /> Assign
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowAssignMenu(!showAssignMenu)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <User className="h-4 w-4" /> {assignee ? assignee.name : 'Assign'} <ChevronDown className="h-4 w-4" />
+              </button>
+              {showAssignMenu && (
+                <div className="absolute right-0 z-10 mt-1 w-56 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                  {incident.assignee_id && (
+                    <button
+                      onClick={() => { updateMut.mutate({ assignee_id: '' }); setShowAssignMenu(false); }}
+                      className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50"
+                    >
+                      Unassign
+                    </button>
+                  )}
+                  {assignableUsers.length === 0 && (
+                    <p className="px-4 py-2 text-sm text-gray-400">No users available</p>
+                  )}
+                  {assignableUsers.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => { updateMut.mutate({ assignee_id: u.id }); setShowAssignMenu(false); }}
+                      className={`block w-full truncate px-4 py-2 text-left text-sm hover:bg-gray-50 ${
+                        u.id === incident.assignee_id ? 'font-semibold text-blue-600' : 'text-gray-700'
+                      }`}
+                    >
+                      {u.name} <span className="text-xs text-gray-400">({u.email})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

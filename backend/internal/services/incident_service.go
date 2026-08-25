@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -132,7 +133,15 @@ func (s *IncidentService) Update(ctx context.Context, id uuid.UUID, req models.U
 		incident.Severity = *req.Severity
 	}
 	if req.AssigneeID != nil {
-		incident.AssigneeID = req.AssigneeID
+		if *req.AssigneeID == "" {
+			incident.AssigneeID = nil // explicit unassign, see UpdateIncidentRequest's doc comment
+		} else {
+			parsed, err := uuid.Parse(*req.AssigneeID)
+			if err != nil {
+				return nil, false, fmt.Errorf("invalid assignee_id: %w", err)
+			}
+			incident.AssigneeID = &parsed
+		}
 	}
 	if req.RootCause != nil {
 		incident.RootCause = *req.RootCause

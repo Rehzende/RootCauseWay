@@ -153,6 +153,89 @@ func TestIncidentService_Update_ClosedAfterResolved_DoesNotRefireTerminal(t *tes
 	assert.Equal(t, alreadyResolvedAt, *result.ResolvedAt)
 }
 
+// TestIncidentService_Update_AssignsIncident pins the fix for the "Assign"
+// button on the incident detail page: it had no onClick at all (a
+// completely dead button), and separately -- with AssigneeID typed
+// *uuid.UUID -- there was no way to distinguish "field absent" from
+// "please clear the assignee" over JSON (both unmarshal to a nil pointer).
+func TestIncidentService_Update_AssignsIncident(t *testing.T) {
+	repo := new(MockIncidentRepo)
+	snapRepo := new(MockAlertSnapshotRepo)
+	svc := NewIncidentService(repo, snapRepo)
+
+	id := uuid.New()
+	existing := &models.Incident{ID: id, Status: "open", Severity: "high"}
+
+	repo.On("GetByID", mock.Anything, id).Return(existing, nil)
+	repo.On("Update", mock.Anything, mock.AnythingOfType("*models.Incident")).Return(nil)
+
+	userID := uuid.New().String()
+	result, _, err := svc.Update(context.Background(), id, models.UpdateIncidentRequest{AssigneeID: &userID})
+
+	require.NoError(t, err)
+	require.NotNil(t, result.AssigneeID)
+	assert.Equal(t, userID, result.AssigneeID.String())
+}
+
+// TestIncidentService_Update_UnassignsViaEmptyString pins the "" sentinel:
+// AssigneeID is now *string specifically so an explicit empty string ("",
+// never a valid UUID) can mean "clear it" while a nil pointer (key absent)
+// still means "don't touch assignment".
+func TestIncidentService_Update_UnassignsViaEmptyString(t *testing.T) {
+	repo := new(MockIncidentRepo)
+	snapRepo := new(MockAlertSnapshotRepo)
+	svc := NewIncidentService(repo, snapRepo)
+
+	id := uuid.New()
+	existingAssignee := uuid.New()
+	existing := &models.Incident{ID: id, Status: "open", Severity: "high", AssigneeID: &existingAssignee}
+
+	repo.On("GetByID", mock.Anything, id).Return(existing, nil)
+	repo.On("Update", mock.Anything, mock.AnythingOfType("*models.Incident")).Return(nil)
+
+	empty := ""
+	result, _, err := svc.Update(context.Background(), id, models.UpdateIncidentRequest{AssigneeID: &empty})
+
+	require.NoError(t, err)
+	assert.Nil(t, result.AssigneeID)
+}
+
+func TestIncidentService_Update_NilAssigneeLeavesExistingUntouched(t *testing.T) {
+	repo := new(MockIncidentRepo)
+	snapRepo := new(MockAlertSnapshotRepo)
+	svc := NewIncidentService(repo, snapRepo)
+
+	id := uuid.New()
+	existingAssignee := uuid.New()
+	existing := &models.Incident{ID: id, Status: "open", Severity: "high", AssigneeID: &existingAssignee}
+
+	repo.On("GetByID", mock.Anything, id).Return(existing, nil)
+	repo.On("Update", mock.Anything, mock.AnythingOfType("*models.Incident")).Return(nil)
+
+	status := "investigating"
+	result, _, err := svc.Update(context.Background(), id, models.UpdateIncidentRequest{Status: &status})
+
+	require.NoError(t, err)
+	require.NotNil(t, result.AssigneeID)
+	assert.Equal(t, existingAssignee, *result.AssigneeID)
+}
+
+func TestIncidentService_Update_InvalidAssigneeIDReturnsError(t *testing.T) {
+	repo := new(MockIncidentRepo)
+	snapRepo := new(MockAlertSnapshotRepo)
+	svc := NewIncidentService(repo, snapRepo)
+
+	id := uuid.New()
+	existing := &models.Incident{ID: id, Status: "open", Severity: "high"}
+	repo.On("GetByID", mock.Anything, id).Return(existing, nil)
+
+	notAUUID := "not-a-uuid"
+	_, _, err := svc.Update(context.Background(), id, models.UpdateIncidentRequest{AssigneeID: &notAUUID})
+
+	require.Error(t, err)
+	repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
 func TestIncidentService_AddEvent(t *testing.T) {
 	repo := new(MockIncidentRepo)
 	snapRepo := new(MockAlertSnapshotRepo)

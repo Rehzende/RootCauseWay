@@ -383,6 +383,53 @@ func TestUpdateIncident_DifferentOrg_Returns404AndDoesNotCallUpdate(t *testing.T
 	incSvc.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
 }
 
+// TestUpdateIncident_InvalidAssigneeID_Returns400 pins the assign-a-person
+// fix: assignee_id is validated as a real UUID (when non-empty) before ever
+// reaching the service, so a malformed value 400s with a clear message
+// instead of either silently failing or 500ing.
+func TestUpdateIncident_InvalidAssigneeID_Returns400(t *testing.T) {
+	incSvc := new(MockIncidentSvc)
+	h := &Handler{Incidents: incSvc}
+	r := setupRouter(h)
+
+	orgID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	id := uuid.New()
+	incSvc.On("GetByID", mock.Anything, id).Return(&models.Incident{ID: id, OrgID: orgID}, nil)
+
+	body, _ := json.Marshal(map[string]string{"assignee_id": "not-a-uuid"})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PATCH", "/api/v1/incidents/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	incSvc.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// TestUpdateIncident_EmptyAssigneeID_Unassigns confirms the "" sentinel
+// passes handler-level validation through to the service (only a non-empty,
+// invalid UUID is rejected -- "" is the deliberate unassign signal).
+func TestUpdateIncident_EmptyAssigneeID_Unassigns(t *testing.T) {
+	incSvc := new(MockIncidentSvc)
+	h := &Handler{Incidents: incSvc}
+	r := setupRouter(h)
+
+	orgID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	id := uuid.New()
+	incSvc.On("GetByID", mock.Anything, id).Return(&models.Incident{ID: id, OrgID: orgID}, nil)
+	incSvc.On("Update", mock.Anything, id, mock.MatchedBy(func(req models.UpdateIncidentRequest) bool {
+		return req.AssigneeID != nil && *req.AssigneeID == ""
+	})).Return(&models.Incident{ID: id, OrgID: orgID}, false, nil)
+
+	body, _ := json.Marshal(map[string]string{"assignee_id": ""})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PATCH", "/api/v1/incidents/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 // TestUpdateIncident_Publishes* pin the WS-bridge event wiring added to
 // close a live-found gap: nothing was ever publishing "incident.created"/
 // "incident.updated", so the frontend's live incident list/dashboard toast
